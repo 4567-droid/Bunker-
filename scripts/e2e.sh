@@ -11,7 +11,7 @@ export ALLOW_TEST_CLOCK=1 TEST_NOW="2026-11-13T11:00:00-03:00"
 
 node scripts/db.mjs reset --yes
 node scripts/db.mjs seed
-[ -d .next ] || npx next build
+npx next build > /tmp/bunker-build.log 2>&1 || { cat /tmp/bunker-build.log; exit 1; }
 if curl -s -o /dev/null "http://localhost:$PORT"; then echo "El puerto $PORT está ocupado" >&2; exit 1; fi
 setsid ./node_modules/.bin/next start -p "$PORT" > /tmp/bunker-e2e.log 2>&1 &
 SERVER=$!
