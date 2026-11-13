@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Bunker — Panel del barbero</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E0E0D}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+input,select{font-family:inherit}
+:focus-visible{outline:2px solid #F5C400;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;background:#0E0E0D;color:#EDEAE2;font-family:'Jost','Futura','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.45">
+
+<sc-if value="{{showLogin}}" hint-placeholder-val="{{false}}">
+<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:32px 16px">
+<form style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:12px">
+<span style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
+<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><g fill="none" stroke="#EDEAE2" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="26" r="5"></circle><circle cx="25" cy="26" r="5"></circle><path d="M12 22 L27 4"></path><path d="M22 22 L7 4"></path></g></svg>
+<span style="font-size:14px;font-weight:500;letter-spacing:.32em">BUNKER</span>
+</span>
+<h1 style="margin:0;font-size:30px;font-weight:600">Panel del barbero</h1>
+<span style="font-size:15px;font-weight:300;color:#A9A59B;margin-bottom:12px">Entrás con tu nombre y tu código. Solo ves tus turnos.</span>
+<label for="b1" style="position:absolute;left:-9999px">Tu nombre</label>
+<input id="b1" type="text" value="Mauri" placeholder="Tu nombre" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<label for="b2" style="position:absolute;left:-9999px">Contraseña o código</label>
+<input id="b2" type="password" value="1234" placeholder="Contraseña o código" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<button type="button" onClick="{{login}}" style="margin-top:8px;min-height:56px;border:0;border-radius:999px;background:{{accent}};color:#0E0E0D;font-size:17px;font-weight:600">Ingresar</button>
+<a href="Main.dc.html" style="align-self:center;display:inline-flex;align-items:center;min-height:44px;font-size:14px;color:#8C887F;text-decoration:underline">Volver a la web</a>
+</form>
+</div>
+</sc-if>
+
+<sc-if value="{{showPanel}}" hint-placeholder-val="{{true}}">
+<div style="flex:1;display:flex;flex-direction:column">
+
+<header style="width:100%;max-width:560px;margin:0 auto;padding:20px 16px 8px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px">
+<span style="display:flex;align-items:center;gap:12px">
+<span style="width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:{{accent}};color:#0E0E0D;font-size:20px;font-weight:600">M</span>
+<span style="display:flex;flex-direction:column;line-height:1.2"><span style="font-size:18px;font-weight:600">Hola, Mauri</span><span style="font-size:13px;font-weight:300;color:#A9A59B">Miércoles 11/11</span></span>
+</span>
+<span style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid #2A2A27;font-size:13px"><span style="width:9px;height:9px;border-radius:50%;background:{{stDot}};box-shadow:0 0 8px {{stDot}}"></span>{{stShort}}</span>
+</header>
+
+<main style="flex:1;width:100%;max-width:560px;margin:0 auto;padding:12px 16px 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px">
+
+<!-- AGENDA -->
+<sc-if value="{{tabAgenda}}" hint-placeholder-val="{{true}}">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+<div style="padding:12px;border-radius:16px;background:#1A1A18;border:1px solid #2A2A27;display:flex;flex-direction:column"><span style="font-size:24px;font-weight:600">{{total}}</span><span style="font-size:12px;font-weight:300;color:#A9A59B">Turnos hoy</span></div>
+<div style="padding:12px;border-radius:16px;background:#1A1A18;border:1px solid #2A2A27;display:flex;flex-direction:column"><span style="font-size:24px;font-weight:600;color:#4CC26A">{{confirmedCount}}</span><span style="font-size:12px;font-weight:300;color:#A9A59B">Confirmaron</span></div>
+<div style="padding:12px;border-radius:16px;background:#1A1A18;border:1px solid #2A2A27;display:flex;flex-direction:column"><span style="font-size:24px;font-weight:600">{{doneCount}}</span><span style="font-size:12px;font-weight:300;color:#A9A59B">Atendidos</span></div>
+</div>
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B;padding:4px 4px 0">MIS TURNOS DE HOY</span>
+<sc-for list="{{rows}}" as="a" hint-placeholder-count="5">
+<button type="button" onClick="{{a.pick}}" aria-pressed="{{a.pressed}}" style="display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:10px 16px;box-sizing:border-box;border-radius:16px;border:1.5px solid {{a.bd}};background:{{a.bg}};color:#EDEAE2;text-align:left">
+<span style="display:flex;flex-direction:column;min-width:52px;line-height:1.1"><span style="font-size:18px;font-weight:600">{{a.time}}</span><sc-if value="{{a.moved}}" hint-placeholder-val="{{false}}"><span style="font-size:12px;color:#8C887F;text-decoration:line-through">{{a.oldTime}}</span></sc-if></span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:16px;font-weight:500">{{a.name}}</span><span style="font-size:13px;font-weight:300;color:#A9A59B">{{a.service}}</span></span>
+<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:{{a.stColor}}"><span style="width:8px;height:8px;border-radius:50%;background:{{a.dot}}"></span>{{a.status}}</span>
+</button>
+</sc-for>
+<sc-if value="{{empty}}" hint-placeholder-val="{{false}}"><span style="color:#A9A59B">No tenés turnos hoy.</span></sc-if>
+
+<sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+<section style="display:flex;flex-direction:column;gap:14px;padding:20px;border-radius:24px;background:#1A1A18;border:1px solid {{accent}}">
+<div style="display:flex;flex-direction:column">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">CLIENTE · {{dTime}}</span>
+<span style="font-size:24px;font-weight:600">{{dName}}</span>
+<span style="font-size:14px;font-weight:300;color:#A9A59B">{{dService}} · {{dPhone}}</span>
+<span style="display:inline-flex;align-items:center;gap:8px;font-size:14px;margin-top:4px"><span style="width:8px;height:8px;border-radius:50%;background:{{dDot}}"></span>{{dAtt}}</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:13px;font-weight:300;color:#A9A59B">Tarjeta: {{dStamps}} de 10</span>
+<div style="display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px">
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="10"><span style="aspect-ratio:1/1;border-radius:50%;box-sizing:border-box;border:1.5px solid {{c.bd}};background:{{c.bg}}"></span></sc-for>
+</div>
+</div>
+<sc-if value="{{showNearly}}" hint-placeholder-val="{{false}}"><span style="font-size:14px;color:{{accent}}">Con este corte completa la tarjeta.</span></sc-if>
+<sc-if value="{{canStart}}" hint-placeholder-val="{{true}}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:13px;font-weight:300;color:#A9A59B">¿Cuánto tardás?</span>
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px">
+<sc-for list="{{estChips}}" as="e" hint-placeholder-count="5"><button type="button" onClick="{{e.pick}}" aria-pressed="{{e.pressed}}" style="min-height:44px;border-radius:999px;border:1.5px solid {{e.bd}};background:{{e.bg}};color:{{e.fg}};font-size:14px;font-weight:500">{{e.label}}</button></sc-for>
+</div>
+<button type="button" onClick="{{startCut}}" style="min-height:52px;border-radius:999px;border:1.5px solid {{accent}};background:transparent;color:#EDEAE2;font-size:16px;font-weight:500">Empezar corte · {{estLabel}}</button>
+</div>
+</sc-if>
+<sc-if value="{{isCuttingSel}}" hint-placeholder-val="{{false}}"><span style="font-size:14px;color:#E0533D">Cortando ahora · terminás a las {{endTime}}</span></sc-if>
+<button type="button" onClick="{{mark}}" disabled="{{markDisabled}}" style="min-height:56px;border:0;border-radius:999px;background:{{markBg}};color:{{markFg}};font-size:16px;font-weight:600">{{markLabel}}</button>
+<button type="button" onClick="{{cancel}}" disabled="{{markDisabled}}" style="min-height:48px;border-radius:999px;border:1px solid #2E2E2A;background:transparent;color:#A9A59B;font-size:14px">Cancelar turno</button>
+</section>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ESTADO -->
+<sc-if value="{{tabEstado}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:14px">
+<section style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 20px;border-radius:24px;background:#1A1A18;border:1px solid {{stBd}};text-align:center">
+<span style="width:22px;height:22px;border-radius:50%;background:{{stDot}};box-shadow:0 0 18px {{stDot}}"></span>
+<span style="font-size:26px;font-weight:600">{{stLabel}}</span>
+<span style="font-size:14px;font-weight:300;color:#A9A59B">{{stSub}}</span>
+</section>
+<sc-if value="{{notCutting}}" hint-placeholder-val="{{true}}">
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+<button type="button" onClick="{{setFree}}" aria-pressed="{{isFree}}" style="min-height:64px;border-radius:18px;border:1.5px solid {{freeBd}};background:{{freeBg}};color:#EDEAE2;font-size:16px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:10px"><span style="width:10px;height:10px;border-radius:50%;background:#4CC26A"></span>Estoy libre</button>
+<button type="button" onClick="{{setBusy}}" aria-pressed="{{isBusy}}" style="min-height:64px;border-radius:18px;border:1.5px solid {{busyBd}};background:{{busyBg}};color:#EDEAE2;font-size:16px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:10px"><span style="width:10px;height:10px;border-radius:50%;background:#E0533D"></span>Estoy ocupado</button>
+</div>
+<span style="font-size:14px;font-weight:300;color:#A9A59B;padding:0 4px">Para avisar cuánto tardás, empezá el corte desde Agenda.</span>
+</sc-if>
+<sc-if value="{{isCutting}}" hint-placeholder-val="{{false}}">
+<section style="display:flex;flex-direction:column;gap:12px;padding:20px;border-radius:24px;background:#1A1A18;border:1px solid #2A2A27">
+<span style="font-size:15px">{{shiftNote}}</span>
+<sc-if value="{{hasNext}}" hint-placeholder-val="{{false}}">
+<span style="padding:12px 14px;border-radius:14px;background:#232320;font-size:14px;font-weight:300;color:#D6D2C8">{{waText}}</span>
+<a href="{{waNext}}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;min-height:52px;border-radius:999px;background:#25D366;color:#0B2414;font-size:15px;font-weight:600">Avisar a {{nextName}} por WhatsApp</a>
+</sc-if>
+<button type="button" onClick="{{finishCut}}" style="min-height:56px;border:0;border-radius:999px;background:{{accent}};color:#0E0E0D;font-size:16px;font-weight:600">Terminé · sellar tarjeta</button>
+</section>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- FILA -->
+<sc-if value="{{tabFila}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0 4px"><span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">FILA SIN TURNO</span><span style="font-size:22px;font-weight:600">{{qCount}} esperando</span></div>
+<sc-for list="{{queue}}" as="q" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:14px;min-height:56px;padding:0 16px;border-radius:16px;background:#1A1A18;border:1px solid #2A2A27"><span style="font-size:18px;font-weight:600;color:{{accent}};min-width:22px">{{q.pos}}</span><span style="font-size:16px">{{q.name}}</span></div>
+</sc-for>
+<sc-if value="{{qEmpty}}" hint-placeholder-val="{{false}}"><span style="color:#A9A59B;padding:0 4px">No hay nadie en la fila.</span></sc-if>
+<sc-if value="{{hasCalled}}" hint-placeholder-val="{{false}}">
+<section style="display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:20px;border:1px solid {{accent}}">
+<span>Le toca a <span style="font-weight:600">{{called}}</span></span>
+<a href="{{calledWa}}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;min-height:50px;border-radius:999px;background:#25D366;color:#0B2414;font-size:15px;font-weight:600">Avisarle por WhatsApp</a>
+</section>
+</sc-if>
+<button type="button" onClick="{{callNext}}" disabled="{{qEmpty}}" style="min-height:56px;border:0;border-radius:999px;background:{{qBtnBg}};color:{{qBtnFg}};font-size:16px;font-weight:600">Llamar al siguiente</button>
+</div>
+</sc-if>
+
+<!-- NUEVO TURNO -->
+<sc-if value="{{tabNuevo}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B;padding:0 4px">CREAR TURNO A MANO</span>
+<label for="n1" style="position:absolute;left:-9999px">Cliente</label>
+<input id="n1" type="text" value="{{newName}}" onChange="{{setNewName}}" placeholder="Nombre y apellido del cliente" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<span style="font-size:13px;font-weight:300;color:#A9A59B;padding:4px 4px 0">Servicio</span>
+<sc-for list="{{serviceOpts}}" as="o" hint-placeholder-count="3">
+<button type="button" onClick="{{o.pick}}" aria-pressed="{{o.on}}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:0 16px;border-radius:16px;border:1.5px solid {{o.bd}};background:{{o.bg}};color:#EDEAE2;font-size:16px"><span>{{o.l}}</span><span style="color:{{o.pc}}">{{o.p}}</span></button>
+</sc-for>
+<span style="font-size:13px;font-weight:300;color:#A9A59B;padding:4px 4px 0">Horario libre</span>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+<sc-for list="{{freeTimeOpts}}" as="t" hint-placeholder-count="3"><button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="min-height:48px;border-radius:999px;border:1.5px solid {{t.bd}};background:{{t.bg}};color:{{t.fg}};font-size:15px;font-weight:500">{{t.t}}</button></sc-for>
+</div>
+<button type="button" onClick="{{create}}" disabled="{{createDisabled}}" style="margin-top:6px;min-height:56px;border:0;border-radius:999px;background:{{createBg}};color:{{createFg}};font-size:16px;font-weight:600">Agregar turno</button>
+<sc-if value="{{justCreated}}" hint-placeholder-val="{{false}}"><span style="font-size:14px;color:#4CC26A;padding:0 4px">Turno agregado a tu agenda.</span></sc-if>
+</div>
+</sc-if>
+
+<!-- CLIENTES -->
+<sc-if value="{{tabClientes}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B;padding:0 4px">MIS CLIENTES</span>
+<sc-for list="{{clients}}" as="c" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:16px;background:#1A1A18;border:1px solid #2A2A27">
+<span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:16px;font-weight:500">{{c.name}}</span><span style="font-size:13px;font-weight:300;color:#A9A59B;overflow:hidden;text-overflow:ellipsis">{{c.phone}} · {{c.email}}</span></span>
+<span style="font-size:16px;font-weight:600;color:{{accent}}">{{c.stamps}}/10</span>
+</div>
+</sc-for>
+<button type="button" onClick="{{logout}}" style="align-self:flex-start;margin-top:12px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid #2E2E2A;background:transparent;color:#A9A59B;font-size:13px">Salir</button>
+</div>
+</sc-if>
+
+</main>
+
+<nav aria-label="Menú del barbero" style="position:sticky;bottom:0;z-index:3;background:#121211;border-top:1px solid #232320">
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));max-width:560px;margin:0 auto">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+<button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:68px;border:0;background:transparent;color:{{t.fg}};font-size:12px;font-weight:{{t.fw}}">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{t.fg}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{t.icon}}"></path></svg>
+{{t.label}}
+</button>
+</sc-for>
+</div>
+</nav>
+
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F5C400","section":"Marca","options":["#F5C400","#E8A23A","#EDEAE2","#C8553D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      loggedIn: false, tab: 'agenda', sel: 'a2', seq: 10,
+      free: true, cutId: '', est: 20,
+      queue: ['Gonzalo R.', 'Ramiro D.', 'Elías F.'], called: '',
+      newName: '', newService: 'corte', newTime: '', justCreated: false,
+      appts: [
+        { id: 'a1', time: '10:00', name: 'Ezequiel Benítez', phone: '362 4905146', email: 'eze.benitez@mail.com', service: 'Corte', stamps: 5, done: true, confirmed: true },
+        { id: 'a2', time: '16:00', name: 'Tomás Ríos', phone: '362 4512330', email: 'tomas.rios@mail.com', service: 'Corte', stamps: 6, done: false, confirmed: true },
+        { id: 'a3', time: '16:30', name: 'Agustín Paz', phone: '362 4118902', email: 'agus.paz@mail.com', service: 'Corte + barba', stamps: 9, done: false, confirmed: true },
+        { id: 'a4', time: '18:00', name: 'Joaquín Molina', phone: '362 4760415', email: 'joaco.molina@mail.com', service: 'Barba sola', stamps: 2, done: false, confirmed: false },
+        { id: 'a5', time: '20:00', name: 'Nahuel Sosa', phone: '362 4233871', email: 'nahuel.sosa@mail.com', service: 'Corte', stamps: 0, done: false, confirmed: false }
+      ]
+    };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#F5C400';
+    const GREEN = '#4CC26A', RED = '#E0533D';
+    const s = this.state;
+    const times = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+    const svc = { corte: 'Corte', combo: 'Corte + barba', barba: 'Barba sola' };
+    const appts = s.appts.slice().sort((a, b) => a.time.localeCompare(b.time));
+    const sel = appts.find((x) => x.id === s.sel) || null;
+
+    const NOW = '16:10';
+    const toM = (t) => { const q = t.split(':'); return Number(q[0]) * 60 + Number(q[1]); };
+    const fmt = (m) => { const h = Math.floor(m / 60), mm = m % 60; return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm; };
+    const dur = { 'Corte': 30, 'Corte + barba': 50, 'Barba sola': 20 };
+    const cutting = appts.find((x) => x.id === s.cutId && !x.done) || null;
+    const endM = cutting ? toM(NOW) + s.est : 0;
+    const newTimes = {};
+    let delay = 0, next = null;
+    if (cutting) {
+      let cursor = endM;
+      appts.filter((x) => !x.done && x.id !== cutting.id && toM(x.time) >= toM(cutting.time)).forEach((x) => {
+        const start = Math.max(toM(x.time), cursor);
+        if (!next) { next = x; delay = start - toM(x.time); }
+        newTimes[x.id] = fmt(start);
+        cursor = start + (dur[x.service] || 30);
+      });
+    }
+    const finishId = (id) => this.setState({ appts: this.state.appts.map((x) => x.id === id && !x.done ? { ...x, done: true, confirmed: true, stamps: Math.min(10, x.stamps + 1) } : x), free: true, cutId: '' });
+
+    const stOf = (x) => x.done ? { status: 'Atendido', dot: '#6E6B63', c: '#8C887F' }
+      : x.confirmed ? { status: 'Confirmó', dot: GREEN, c: '#D6D2C8' }
+      : { status: 'Sin confirmar', dot: accent, c: '#A9A59B' };
+
+    const rows = appts.map((x) => {
+      const on = sel && x.id === sel.id;
+      const st = cutting && x.id === cutting.id ? { status: 'Cortando', dot: RED, c: '#EDEAE2' } : stOf(x);
+      return {
+        time: newTimes[x.id] || x.time, oldTime: x.time, moved: !!newTimes[x.id] && newTimes[x.id] !== x.time,
+        name: x.name, service: x.service, pressed: !!on,
+        bg: on ? '#26230F' : '#1A1A18', bd: on ? accent : '#2A2A27',
+        status: st.status, dot: st.dot, stColor: st.c,
+        pick: () => this.setState({ sel: x.id })
+      };
+    });
+
+    const used = appts.map((x) => x.time);
+    const freeTimes = times.filter((t) => used.indexOf(t) < 0);
+    const newTime = freeTimes.indexOf(s.newTime) >= 0 ? s.newTime : '';
+    const canCreate = s.newName.trim().length > 2 && !!newTime;
+
+    const stamps = sel ? sel.stamps : 0;
+    const cells = [];
+    for (let i = 1; i <= 10; i++) { const st = i <= stamps; cells.push({ bg: st ? accent : 'transparent', bd: st ? accent : '#3A3934' }); }
+
+    const clientsMap = {};
+    s.appts.forEach((x) => { clientsMap[x.name] = x; });
+    const clients = Object.keys(clientsMap).sort().map((k) => ({ name: k, phone: clientsMap[k].phone, email: clientsMap[k].email, stamps: clientsMap[k].stamps }));
+
+    const icons = {
+      agenda: 'M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 2v4M16 2v4',
+      estado: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+      fila: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+      nuevo: 'M12 5v14M5 12h14',
+      clientes: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 3.5a4 4 0 0 1 0 7M22 21a7 7 0 0 0-4-6.3'
+    };
+    const tabDefs = [{ id: 'agenda', label: 'Agenda' }, { id: 'estado', label: 'Estado' }, { id: 'fila', label: 'Fila' }, { id: 'nuevo', label: 'Nuevo' }, { id: 'clientes', label: 'Clientes' }];
+    const nextMsg = next ? 'Hola ' + next.name.split(' ')[0] + '! Mauri se libera en ' + s.est + ' minutos. ' + (delay > 0 ? 'Tu turno de las ' + next.time + ' pasa a las ' + newTimes[next.id] + '.' : 'Te esperamos a las ' + next.time + '.') : '';
+
+    return {
+      accent: accent,
+      showLogin: !s.loggedIn, showPanel: s.loggedIn,
+      login: () => this.setState({ loggedIn: true }),
+      logout: () => this.setState({ loggedIn: false }),
+      tabs: tabDefs.map((t) => { const on = s.tab === t.id; return { label: t.label, on: on, fg: on ? accent : '#8C887F', fw: on ? '600' : '400', icon: icons[t.id], pick: () => this.setState({ tab: t.id, justCreated: false }) }; }),
+      tabAgenda: s.tab === 'agenda', tabEstado: s.tab === 'estado', tabFila: s.tab === 'fila', tabNuevo: s.tab === 'nuevo', tabClientes: s.tab === 'clientes',
+
+      rows: rows, empty: appts.length === 0,
+      total: appts.length,
+      confirmedCount: appts.filter((x) => x.confirmed).length,
+      doneCount: appts.filter((x) => x.done).length,
+      hasSel: !!sel,
+      dName: sel ? sel.name : '', dService: sel ? sel.service : '', dTime: sel ? (newTimes[sel.id] || sel.time) : '',
+      dPhone: sel ? sel.phone : '',
+      dAtt: sel ? (sel.confirmed ? 'Confirmó que viene' : 'Todavía no confirmó') : '',
+      dDot: sel && sel.confirmed ? GREEN : accent,
+      dStamps: stamps, cells: cells,
+      showNearly: !!sel && !sel.done && sel.stamps === 9,
+      canStart: !!sel && !sel.done && !cutting,
+      isCuttingSel: !!cutting && !!sel && cutting.id === sel.id,
+      endTime: cutting ? fmt(endM) : '',
+      estLabel: s.est + ' min',
+      estChips: [10, 15, 20, 30, 45].map((n) => ({ label: n + "'", pressed: s.est === n, bg: s.est === n ? accent : 'transparent', fg: s.est === n ? '#0E0E0D' : '#EDEAE2', bd: s.est === n ? accent : '#2A2A27', pick: () => this.setState({ est: n }) })),
+      startCut: () => this.setState({ cutId: this.state.sel, free: false, tab: 'estado' }),
+      markDisabled: !sel || sel.done,
+      markBg: !sel || sel.done ? '#2A2A27' : accent,
+      markFg: !sel || sel.done ? '#8C887F' : '#0E0E0D',
+      markLabel: sel && sel.done ? 'Corte registrado' : 'Vino · marcar y sellar',
+      mark: () => finishId(this.state.sel),
+      cancel: () => this.setState({ appts: this.state.appts.filter((x) => x.id !== this.state.sel), sel: '', cutId: this.state.cutId === this.state.sel ? '' : this.state.cutId }),
+
+      stShort: cutting ? 'Cortando' : (s.free ? 'Libre' : 'Ocupado'),
+      stLabel: cutting ? 'Cortando · libre a las ' + fmt(endM) : (s.free ? 'Estás libre' : 'Estás ocupado'),
+      stSub: cutting ? 'En la web se ve: Mauri se libera en ' + s.est + ' min.' : 'Así te ven los clientes en la web ahora.',
+      stDot: cutting || !s.free ? RED : GREEN,
+      stBd: cutting ? RED : (s.free ? GREEN : '#2A2A27'),
+      isCutting: !!cutting, notCutting: !cutting,
+      isFree: s.free, isBusy: !s.free,
+      freeBg: s.free ? '#132416' : '#1A1A18', freeBd: s.free ? GREEN : '#2A2A27',
+      busyBg: !s.free ? '#2A1512' : '#1A1A18', busyBd: !s.free ? RED : '#2A2A27',
+      setFree: () => this.setState({ free: true }),
+      setBusy: () => this.setState({ free: false }),
+      finishCut: () => finishId(this.state.cutId),
+      shiftNote: !next ? 'No tenés más turnos después de este.' : (delay > 0 ? 'Venís ' + delay + ' min demorado: los turnos que siguen se corren solos.' : 'Llegás a tiempo: los turnos que siguen no se mueven.'),
+      hasNext: !!next,
+      nextName: next ? next.name.split(' ')[0] : '',
+      waText: nextMsg,
+      waNext: next ? 'https://wa.me/549' + String(next.phone).replace(/\D/g, '') + '?text=' + encodeURIComponent(nextMsg) : '',
+
+      queue: s.queue.map((n, i) => ({ pos: i + 1, name: n })),
+      qCount: s.queue.length, qEmpty: s.queue.length === 0,
+      qBtnBg: s.queue.length ? accent : '#2A2A27', qBtnFg: s.queue.length ? '#0E0E0D' : '#8C887F',
+      hasCalled: !!s.called, called: s.called,
+      calledWa: 'https://wa.me/?text=' + encodeURIComponent('Hola ' + s.called.split(' ')[0] + '! Ya te toca en Bunker, Mauri te espera.'),
+      callNext: () => { const q = this.state.queue; if (q.length) this.setState({ called: q[0], queue: q.slice(1) }); },
+
+      newName: s.newName,
+      setNewName: (e) => this.setState({ newName: e.target.value, justCreated: false }),
+      serviceOpts: [{ v: 'corte', l: 'Corte', p: '$15.000' }, { v: 'combo', l: 'Corte + barba', p: '$18.000' }, { v: 'barba', l: 'Barba sola', p: '$10.000' }].map((o) => {
+        const on = s.newService === o.v;
+        return { l: o.l, p: o.p, on: on, bg: on ? '#26230F' : '#1A1A18', bd: on ? accent : '#2A2A27', pc: on ? accent : '#A9A59B', pick: () => this.setState({ newService: o.v }) };
+      }),
+      freeTimeOpts: freeTimes.map((t) => { const on = newTime === t; return { t: t, on: on, bg: on ? accent : '#1A1A18', fg: on ? '#0E0E0D' : '#EDEAE2', bd: on ? accent : '#2A2A27', pick: () => this.setState({ newTime: t }) }; }),
+      createDisabled: !canCreate,
+      createBg: canCreate ? accent : '#2A2A27', createFg: canCreate ? '#0E0E0D' : '#8C887F',
+      justCreated: s.justCreated,
+      create: () => {
+        const id = 'n' + this.state.seq;
+        const a = { id: id, time: newTime, name: this.state.newName.trim(), phone: '—', email: '—', service: svc[this.state.newService], stamps: 0, done: false, confirmed: true };
+        this.setState({ appts: this.state.appts.concat([a]), sel: id, seq: this.state.seq + 1, newName: '', newTime: '', justCreated: true });
+      },
+      clients: clients
+    };
+  }
+}
+</script>
+</body>
+</html>
