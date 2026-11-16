@@ -1,8 +1,9 @@
 import { newReferralCode } from '@/lib/clients';
-import { clientIp, endSession, guardAttempts, recordFailure, startSession } from '@/lib/auth';
+import { clientIp, endSession, endSessionsFor, guardAttempts, recordFailure, startSession } from '@/lib/auth';
 import {
   apptDto,
   bizNow,
+  businessCuts,
   cancelAppointment,
   createAppointment,
   getService,
@@ -14,11 +15,11 @@ import {
 } from '@/lib/booking';
 import { currentBusiness, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
-import { firstName, isEmail, normalizePhone, phoneDisplay } from '@/lib/format';
+import { firstName, isEmail, money, normalizePhone, phoneDisplay } from '@/lib/format';
 import { fail, json, notFound, readBody, route, str } from '@/lib/http';
 import { nextIsFree } from '@/lib/rules';
 import { currentClient, requireClient, type ClientRow } from '@/lib/session';
-import { isOpenAt, type Now } from '@/lib/time';
+import { dayLabel, isOpenAt, zonedToUtc, type Now } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,11 @@ async function mePayload(tx: Tx, biz: Business, c: ClientRow, now: Now) {
   const [entry] = await tx<{ id: string; status: string; created_at: Date }[]>`
     select id, status, created_at from queue_entries
     where client_id = ${c.id} and status in ('waiting', 'called') limit 1`;
+  const past = await tx<{ id: string; day: string; service_name: string; barber_name: string; status: string; stamps_added: number; loyalty_free: boolean; final_price: number; discount_pct: number }[]>`
+    select a.id, a.day, a.service_name, s.name as barber_name, a.status, a.stamps_added, a.loyalty_free, a.final_price, a.discount_pct
+    from appointments a join staff s on s.id = a.barber_id
+    where a.client_id = ${c.id} and a.status in ('completed', 'no_show')
+    order by a.day desc, a.start_min desc limit 10`;
   let queue = null;
   if (entry) {
     const [{ ahead }] = await tx<{ ahead: number }[]>`
@@ -78,6 +84,17 @@ async function mePayload(tx: Tx, biz: Business, c: ClientRow, now: Now) {
       nextFree: nextIsFree(c.stamps, biz.loyalty_goal),
     },
     upcoming,
+    history: past.map((h) => ({
+      id: h.id,
+      dayLabel: dayLabel(h.day),
+      serviceName: h.service_name,
+      barberName: h.barber_name,
+      status: h.status,
+      stampsAdded: h.stamps_added,
+      free: h.loyalty_free,
+      discountPct: h.discount_pct,
+      paid: h.final_price,
+    })),
     rewards: rewards.map((r) => ({
       id: r.id,
       kind: r.kind,
@@ -115,6 +132,51 @@ export const GET = route(async (req, [action]) => {
           return { price: q.price, discountPct: q.pct, reason: q.reason, finalPrice: q.finalPrice };
         }),
       );
+    }
+    case 'ics': {
+      const c = await requireClient(biz);
+      const id = new URL(req.url).searchParams.get('id');
+      const a = await tenantTx(biz.id, async (tx) => {
+        const row = await ownAppointment(tx, biz, c, id);
+        const [b] = await tx<{ name: string }[]>`select name from staff where id = ${row.barber_id}`;
+        return { ...row, barber_name: b?.name ?? '' };
+      });
+      const start = zonedToUtc(a.day, a.start_min, biz.timezone);
+      const end = zonedToUtc(a.day, a.end_min, biz.timezone);
+      const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      const esc = (t: string) => t.replace(/\\/g, '\\\\').replace(/[,;]/g, (m) => `\\${m}`).replace(/\r?\n/g, '\\n');
+      const where = [biz.address, biz.city].filter(Boolean).join(', ') || biz.name;
+      const total = a.final_price + a.products_total;
+      const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Turnos//ES',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        `UID:${a.id}@${biz.slug}`,
+        `DTSTAMP:${stamp(new Date())}`,
+        `DTSTART:${stamp(start)}`,
+        `DTEND:${stamp(end)}`,
+        `SUMMARY:${esc(`${a.service_name} en ${biz.name}`)}`,
+        `LOCATION:${esc(where)}`,
+        `DESCRIPTION:${esc(`Con ${a.barber_name}. Total ${money(total)}. Si no podés venir, avisá por WhatsApp.`)}`,
+        'BEGIN:VALARM',
+        'TRIGGER:-PT2H',
+        'ACTION:DISPLAY',
+        `DESCRIPTION:${esc(`Turno en ${biz.name}`)}`,
+        'END:VALARM',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+      ].join('\r\n');
+      return new Response(ics, {
+        headers: {
+          'Content-Type': 'text/calendar; charset=utf-8',
+          'Content-Disposition': `attachment; filename="turno-${biz.slug}-${a.day}.ics"`,
+          'Cache-Control': 'no-store',
+        },
+      });
     }
   }
   notFound();
@@ -219,6 +281,39 @@ export const POST = route(async (req, [action]) => {
       return json({ ok: true });
     }
 
+    case 'update': {
+      const c = await requireClient(biz);
+      const name = str(body, 'name', { min: 3, max: 80, label: 'el nombre y apellido' }).replace(/\s+/g, ' ');
+      if (!/\S+\s+\S+/.test(name)) fail(400, 'Escribí tu nombre y apellido.');
+      const email = str(body, 'email', { optional: true, max: 120 }).toLowerCase();
+      if (email && !isEmail(email)) fail(400, 'Revisá el correo electrónico.');
+      const updated = await tenantTx(biz.id, async (tx) => {
+        const [row] = await tx<ClientRow[]>`
+          update clients set name = ${name}, email = ${email || null} where id = ${c.id} returning *`;
+        await tx`update appointments set client_name = ${name}
+                 where client_id = ${c.id} and status in ('booked', 'in_progress')`;
+        await tx`update queue_entries set name = ${name} where client_id = ${c.id} and status in ('waiting', 'called')`;
+        return row;
+      });
+      return json(await tenantTx(biz.id, (tx) => mePayload(tx, biz, updated, now)));
+    }
+
+    case 'delete': {
+      const c = await requireClient(biz);
+      if (body.confirm !== true) fail(400, 'Confirmá que querés borrar tu cuenta.');
+      await tenantTx(biz.id, async (tx) => {
+        const open = await tx<ApptRow[]>`
+          select * from appointments where client_id = ${c.id} and status in ('booked', 'in_progress') for update`;
+        for (const a of open) await cancelAppointment(tx, a);
+        // Los cortes viejos quedan para las cuentas del local, pero sin datos personales
+        await tx`update appointments set client_name = 'Cliente eliminado', client_phone = null where client_id = ${c.id}`;
+        await tx`delete from clients where id = ${c.id}`;
+      });
+      await endSessionsFor({ clientId: c.id });
+      await endSession('client');
+      return json({ ok: true });
+    }
+
     case 'confirm': {
       const c = await requireClient(biz);
       await tenantTx(biz.id, async (tx) => {
@@ -234,7 +329,9 @@ export const POST = route(async (req, [action]) => {
       const join = body.action === 'join';
       await tenantTx(biz.id, async (tx) => {
         if (join) {
-          if (!isOpenAt(biz.hours, now.day, now.min)) fail(409, 'Ahora estamos cerrados. Anotate cuando abramos.');
+          if (!isOpenAt(biz.hours, now.day, now.min, await businessCuts(tx, biz.id, now.day, 0))) {
+            fail(409, 'Ahora estamos cerrados. Anotate cuando abramos.');
+          }
           const [already] = await tx`select 1 from queue_entries where client_id = ${c.id} and status in ('waiting', 'called')`;
           if (already) fail(409, 'Ya estás en la fila.');
           await tx`insert into queue_entries (business_id, client_id, name, phone)

@@ -1,6 +1,11 @@
 import {
   apptDto,
   bizNow,
+  blockDto,
+  createBlocks,
+  loadBlocks,
+  noShowAppointment,
+  parseBlockInput,
   cancelAppointment,
   completeAppointment,
   createAppointment,
@@ -30,11 +35,14 @@ type AgendaRow = ApptRow & {
   c_stamps: number | null;
   c_email: string | null;
   c_last_visit_on: string | null;
+  c_visits: number | null;
+  c_no_shows: number | null;
 };
 
 async function agenda(tx: Tx, biz: Business, st: StaffRow, day: string, now: Now) {
   const rows = await tx<AgendaRow[]>`
-    select a.*, c.stamps as c_stamps, c.email as c_email, c.last_visit_on as c_last_visit_on
+    select a.*, c.stamps as c_stamps, c.email as c_email, c.last_visit_on as c_last_visit_on, c.visits as c_visits,
+           (select count(*)::int from appointments x where x.client_id = a.client_id and x.status = 'no_show') as c_no_shows
     from appointments a left join clients c on c.id = a.client_id
     where a.business_id = ${biz.id} and a.barber_id = ${st.id} and a.day = ${day}
       and a.status not in ('cancelled')
@@ -59,9 +67,12 @@ async function agenda(tx: Tx, biz: Business, st: StaffRow, day: string, now: Now
         stamps: r.client_id ? stamps : null,
         nextFree: r.client_id ? nextIsFree(stamps, biz.loyalty_goal) : false,
         doubleStamp: !!r.client_id && double,
+        visits: r.c_visits ?? 0,
+        noShows: r.c_no_shows ?? 0,
       },
     };
   });
+  const dayBlocks = (await loadBlocks(tx, biz.id, day, day)).filter((b) => !b.barber_id || b.barber_id === st.id);
   const next = cuttingRow
     ? list.find((r) => r.status === 'booked' && r.start >= cuttingRow.start_min) ?? null
     : null;
@@ -79,8 +90,10 @@ async function agenda(tx: Tx, biz: Business, st: StaffRow, day: string, now: Now
       total: list.filter((r) => r.source !== 'fila').length,
       confirmed: list.filter((r) => r.source !== 'fila' && (r.confirmed || r.status === 'completed')).length,
       done: list.filter((r) => r.status === 'completed').length,
+      noShow: list.filter((r) => r.status === 'no_show').length,
     },
     rows: list,
+    blocks: dayBlocks.map((b) => ({ ...blockDto(b), mine: b.barber_id === st.id })),
     cutting: cuttingRow ? { id: cuttingRow.id, leftMin: left, endTime: fmtMin(Math.min(1439, now.min + left)) } : null,
     next: next
       ? {
@@ -168,8 +181,16 @@ export const GET = route(async (req, [action]) => {
       });
     }
     case 'days': {
-      const days = Array.from({ length: 7 }, (_, i) => addDays(now.day, i));
-      return json({ today: now.day, days });
+      const days = Array.from({ length: Math.max(7, biz.booking_days) }, (_, i) => addDays(now.day, i));
+      return json({ today: now.day, days, hours: biz.hours, slotStep: biz.slot_step });
+    }
+    case 'blocks': {
+      const rows = await tenantTx(biz.id, (tx) => loadBlocks(tx, biz.id, now.day, addDays(now.day, 120)));
+      return json({
+        blocks: rows
+          .filter((b) => !b.barber_id || b.barber_id === st.id)
+          .map((b) => ({ ...blockDto(b), mine: b.barber_id === st.id })),
+      });
     }
   }
   notFound();
@@ -201,6 +222,30 @@ export const POST = route(async (req, path) => {
     case 'cancel':
       await tenantTx(biz.id, async (tx) => cancelAppointment(tx, await myAppointment(tx, biz, st, body.id)));
       return json({ ok: true });
+
+    case 'noshow':
+      await tenantTx(biz.id, async (tx) => noShowAppointment(tx, await myAppointment(tx, biz, st, body.id), now));
+      return json({ ok: true });
+
+    case 'remind':
+      await tenantTx(biz.id, async (tx) => {
+        const a = await myAppointment(tx, biz, st, body.id);
+        await tx`update appointments set reminded_at = now() where id = ${a.id}`;
+      });
+      return json({ ok: true });
+
+    case 'block': {
+      if (sub === 'delete') {
+        await tenantTx(biz.id, async (tx) => {
+          const r = await tx`delete from blocks where id = ${uuid(body.id)} and business_id = ${biz.id} and barber_id = ${st.id}`;
+          if (!r.count) fail(404, 'Ese bloqueo no es tuyo o ya no existe.');
+        });
+        return json({ ok: true });
+      }
+      const input = parseBlockInput(body, { multiDay: true });
+      const n = await tenantTx(biz.id, (tx) => createBlocks(tx, biz, { ...input, barberId: st.id, by: st.id }, now));
+      return json({ ok: true, days: n }, 201);
+    }
 
     case 'status': {
       const state = body.state;

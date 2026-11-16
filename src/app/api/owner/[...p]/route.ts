@@ -1,10 +1,12 @@
 import { endSessionsFor, hashPassword, normUser, verifyPassword } from '@/lib/auth';
-import { bizNow } from '@/lib/booking';
+import { apptDto, bizNow, blockDto, businessCuts, createBlocks, loadBlocks, parseBlockInput, type ApptRow } from '@/lib/booking';
+import { phoneDisplay } from '@/lib/format';
+import { dropImage, saveImage } from '@/lib/images';
 import { currentBusiness, forgetBusinessCache, type Business } from '@/lib/business';
 import { systemTx, tenantTx, type Tx } from '@/lib/db';
 import { bool, fail, int, json, notFound, readBody, route, str, uuid, type Body } from '@/lib/http';
 import { requireStaff } from '@/lib/session';
-import { isDay, isOpenDay, monthDays, monthLabel, toMin, type Hours, type Now } from '@/lib/time';
+import { addDays, dayLabel, isDay, isOpenDay, monthDays, monthLabel, toMin, type Hours, type Now } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +26,8 @@ async function finance(tx: Tx, biz: Business, month: string, now: Now) {
   const days = monthDays(month);
   const first = days[0];
   const last = days[days.length - 1];
-  const openDays = days.filter((d) => isOpenDay(biz.hours, d));
+  const closures = await businessCuts(tx, biz.id, first, days.length);
+  const openDays = days.filter((d) => isOpenDay(biz.hours, d, closures));
   const elapsed = openDays.filter((d) => d <= now.day).length;
 
   const barbers = await tx<{ id: string; name: string; active: boolean }[]>`
@@ -149,11 +152,11 @@ function parseHours(raw: unknown): Hours {
 
 async function settings(tx: Tx, biz: Business) {
   const [b] = await tx<Business[]>`select * from businesses where id = ${biz.id}`;
-  const barbers = await tx`select id, name, instagram, active, sort from staff
+  const barbers = await tx`select id, name, instagram, photo_url as "photoUrl", active, sort from staff
                            where business_id = ${biz.id} and role = 'barber' order by sort, name`;
   const services = await tx`select id, name, duration_min as duration, price, active, sort from services
                             where business_id = ${biz.id} order by sort, name`;
-  const products = await tx`select id, name, description, price, active, sort from products
+  const products = await tx`select id, name, description, price, image_url as "imageUrl", active, sort from products
                             where business_id = ${biz.id} order by sort, name`;
   return {
     business: {
@@ -164,6 +167,8 @@ async function settings(tx: Tx, biz: Business) {
       instagram: b.instagram,
       mapsUrl: b.maps_url,
       transferAlias: b.transfer_alias,
+      mpLink: b.mp_link,
+      heroUrl: b.hero_url,
       hours: b.hours,
       slotStep: b.slot_step,
       bookingDays: b.booking_days,
@@ -179,10 +184,61 @@ async function settings(tx: Tx, biz: Business) {
   };
 }
 
+interface ClientListRow {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  stamps: number;
+  visits: number;
+  last_visit_on: string | null;
+  created_at: Date;
+  source: string;
+  no_shows: number;
+  invited: number;
+  next_day: string | null;
+}
+
+async function clientList(tx: Tx, biz: Business, q: string, now: Now) {
+  const like = `%${q.replace(/[%_\\]/g, '')}%`;
+  const digits = q.replace(/\D/g, '');
+  return tx<ClientListRow[]>`
+    select c.id, c.name, c.phone, c.email, c.stamps, c.visits, c.last_visit_on, c.created_at, c.source,
+           (select count(*)::int from appointments a where a.client_id = c.id and a.status = 'no_show') as no_shows,
+           (select count(*)::int from clients r where r.referred_by = c.id) as invited,
+           (select min(a.day) from appointments a where a.client_id = c.id and a.status = 'booked' and a.day >= ${now.day}) as next_day
+    from clients c
+    where c.business_id = ${biz.id}
+      ${q ? tx`and (c.name ilike ${like} or c.email ilike ${like} ${digits.length >= 3 ? tx`or c.phone like ${'%' + digits + '%'}` : tx``})` : tx``}
+    order by c.last_visit_on desc nulls last, c.created_at desc
+    limit 500`;
+}
+
+function csvCell(v: unknown): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  // Evita que Excel tome el texto como fórmula
+  const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+  return /[",;\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
 const optText = (b: Body, k: string, max = 200) => {
   const v = str(b, k, { optional: true, max });
   return v || null;
 };
+
+function mpLink(b: Body): string | null {
+  const v = optText(b, 'mpLink', 300);
+  if (!v) return null;
+  let u: URL;
+  try {
+    u = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
+  } catch {
+    fail(400, 'Revisá el link de Mercado Pago (ej: https://link.mercadopago.com.ar/bunker).');
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') fail(400, 'Revisá el link de Mercado Pago.');
+  u.protocol = 'https:';
+  return u.toString();
+}
 
 export const GET = route(async (req, [action]) => {
   const biz = await currentBusiness();
@@ -194,6 +250,89 @@ export const GET = route(async (req, [action]) => {
     return json(await tenantTx(biz.id, (tx) => finance(tx, biz, month, now)));
   }
   if (action === 'settings') return json(await tenantTx(biz.id, (tx) => settings(tx, biz)));
+
+  const q = new URL(req.url).searchParams;
+  if (action === 'blocks') {
+    return json(
+      await tenantTx(biz.id, async (tx) => {
+        const names = Object.fromEntries(
+          (await tx<{ id: string; name: string }[]>`select id, name from staff where business_id = ${biz.id} and role = 'barber'`).map((r) => [r.id, r.name]),
+        );
+        const rows = await loadBlocks(tx, biz.id, now.day, addDays(now.day, 366));
+        return { today: now.day, blocks: rows.map((b) => blockDto(b, names)) };
+      }),
+    );
+  }
+  if (action === 'clients') {
+    const search = (q.get('q') ?? '').trim().slice(0, 60);
+    const rows = await tenantTx(biz.id, (tx) => clientList(tx, biz, search, now));
+    if (q.get('format') === 'csv') {
+      const head = ['Nombre', 'Teléfono', 'Correo', 'Sellos', 'Visitas', 'Último corte', 'Faltó', 'Invitó', 'Próximo turno', 'Alta'];
+      const lines = rows.map((c) =>
+        [c.name, phoneDisplay(c.phone), c.email, c.stamps, c.visits, c.last_visit_on, c.no_shows, c.invited, c.next_day,
+         new Date(c.created_at).toISOString().slice(0, 10)].map(csvCell).join(';'),
+      );
+      const body = '\uFEFF' + [head.join(';'), ...lines].join('\r\n');
+      return new Response(body, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="clientes-${biz.slug}-${now.day}.csv"`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+    return json({
+      goal: biz.loyalty_goal,
+      total: rows.length,
+      clients: rows.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        phoneDisplay: phoneDisplay(c.phone),
+        email: c.email,
+        stamps: c.stamps,
+        visits: c.visits,
+        lastVisitOn: c.last_visit_on,
+        noShows: c.no_shows,
+        invited: c.invited,
+        nextDay: c.next_day,
+        source: c.source,
+      })),
+    });
+  }
+  if (action === 'agenda') {
+    const day = isDay(q.get('day')) ? (q.get('day') as string) : now.day;
+    return json(
+      await tenantTx(biz.id, async (tx) => {
+        const barbers = await tx<{ id: string; name: string }[]>`
+          select id, name from staff where business_id = ${biz.id} and role = 'barber' and active order by sort, name`;
+        const rows = await tx<ApptRow[]>`
+          select * from appointments where business_id = ${biz.id} and day = ${day} and status <> 'cancelled'
+          order by start_min`;
+        const blocks = await loadBlocks(tx, biz.id, day, day);
+        const names = Object.fromEntries(barbers.map((b) => [b.id, b.name]));
+        return {
+          day,
+          dayLabel: dayLabel(day),
+          today: now.day,
+          days: Array.from({ length: 14 }, (_, i) => addDays(now.day, i - 1)),
+          barbers: barbers.map((b) => ({
+            id: b.id,
+            name: b.name,
+            rows: rows.filter((r) => r.barber_id === b.id).map((r) => ({ ...apptDto(r), clientPhone: phoneDisplay(r.client_phone) })),
+            blocks: blocks.filter((x) => x.barber_id === b.id).map((x) => blockDto(x, names)),
+          })),
+          closures: blocks.filter((x) => !x.barber_id).map((x) => blockDto(x, names)),
+          totals: {
+            booked: rows.filter((r) => r.status === 'booked' || r.status === 'in_progress').length,
+            done: rows.filter((r) => r.status === 'completed').length,
+            noShow: rows.filter((r) => r.status === 'no_show').length,
+            amount: rows.filter((r) => r.status !== 'no_show').reduce((a, r) => a + r.final_price + r.products_total, 0),
+          },
+        };
+      }),
+    );
+  }
   notFound();
 });
 
@@ -246,6 +385,7 @@ export const POST = route(async (req, path) => {
                    instagram = ${optText(body, 'instagram', 60)?.replace(/^@/, '') ?? null},
                    maps_url = ${optText(body, 'mapsUrl', 400)},
                    transfer_alias = ${optText(body, 'transferAlias', 60)},
+                   mp_link = ${mpLink(body)},
                    hours = ${tx.json(hours)},
                    slot_step = ${int(body, 'slotStep', { min: 5, max: 120, label: 'el intervalo' })},
                    booking_days = ${int(body, 'bookingDays', { min: 1, max: 90, label: 'los días' })},
@@ -305,6 +445,48 @@ export const POST = route(async (req, path) => {
         return { ok: true };
       }
 
+      case 'blocks': {
+        const input = parseBlockInput(body, { multiDay: true });
+        const barberId = body.barberId ? uuid(body.barberId) : null;
+        if (barberId) {
+          const [b] = await tx`select 1 from staff where id = ${barberId} and business_id = ${biz.id} and role = 'barber'`;
+          if (!b) fail(404, 'Barbero no encontrado.');
+        }
+        const n = await createBlocks(tx, biz, { ...input, barberId, by: me.id }, now);
+        return { ok: true, days: n };
+      }
+      case 'blocks/delete': {
+        const r = await tx`delete from blocks where id = ${uuid(body.id)} and business_id = ${biz.id}`;
+        if (!r.count) fail(404, 'Ese bloqueo ya no existe.');
+        return { ok: true };
+      }
+
+      case 'image':
+      case 'image/delete': {
+        const target = String(body.target);
+        let old: string | null = null;
+        if (target === 'hero') {
+          old = (await tx<{ u: string | null }[]>`select hero_url as u from businesses where id = ${biz.id}`)[0]?.u ?? null;
+        } else if (target === 'product') {
+          const [r] = await tx<{ u: string | null }[]>`select image_url as u from products where id = ${uuid(body.id)} and business_id = ${biz.id}`;
+          if (!r) fail(404, 'Producto no encontrado.');
+          old = r.u;
+        } else if (target === 'barber') {
+          const [r] = await tx<{ u: string | null }[]>`select photo_url as u from staff where id = ${uuid(body.id)} and business_id = ${biz.id} and role = 'barber'`;
+          if (!r) fail(404, 'Barbero no encontrado.');
+          old = r.u;
+        } else {
+          fail(400, 'Foto de qué?');
+        }
+        const url = key === 'image' ? await saveImage(tx, biz.id, body.data) : null;
+        if (target === 'hero') await tx`update businesses set hero_url = ${url} where id = ${biz.id}`;
+        if (target === 'product') await tx`update products set image_url = ${url} where id = ${uuid(body.id)} and business_id = ${biz.id}`;
+        if (target === 'barber') await tx`update staff set photo_url = ${url} where id = ${uuid(body.id)} and business_id = ${biz.id}`;
+        await dropImage(tx, biz.id, old);
+        if (target === 'hero') forgetBusinessCache();
+        return { ok: true, url };
+      }
+
       case 'product':
       case 'product/update': {
         const name = str(body, 'name', { min: 2, max: 60, label: 'el nombre' });
@@ -329,7 +511,7 @@ export const POST = route(async (req, path) => {
 
   if (result) {
     if ('endSessions' in result && result.endSessions) await endSessionsFor({ staffId: result.endSessions });
-    return json({ ok: true });
+    return json({ ok: true, ...('url' in result ? { url: result.url } : {}), ...('days' in result ? { days: result.days } : {}) });
   }
 
   if (key === 'password') {
