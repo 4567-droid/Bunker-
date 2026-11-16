@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp, type Appt } from '@/components/client/app-context';
 import { AuthFields, authValid, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
-import { Chip, Dot, ErrorNote, GhostButton, GREEN, Kicker, OptionRow, RED, SummaryRow, WaLink } from '@/components/ui';
+import { Avatar, Chip, Dot, ErrorNote, GhostButton, GREEN, Kicker, OptionRow, RED, SummaryRow, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { money, PAYMENTS, type Payment } from '@/lib/format';
 import { DAY_SHORT, dayLabel, dow } from '@/lib/time';
@@ -29,7 +29,8 @@ export default function Turno() {
   const biz = config.business;
   const short = biz.name.split(/\s+/)[0];
   const [step, setStep] = useState(1);
-  const [days, setDays] = useState<{ day: string; available: boolean }[] | null>(null);
+  const [days, setDays] = useState<{ day: string; available: boolean; closed: string | null }[] | null>(null);
+  const [copied, setCopied] = useState(false);
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [mode, setMode] = useState<AuthMode>('register');
@@ -53,7 +54,7 @@ export default function Turno() {
     if (!service) return;
     let off = false;
     setDays(null);
-    api<{ days: { day: string; available: boolean }[] }>(`/api/public/days?service=${service.id}`)
+    api<{ days: { day: string; available: boolean; closed: string | null }[] }>(`/api/public/days?service=${service.id}`)
       .then((r) => {
         if (off) return;
         setDays(r.days);
@@ -119,7 +120,13 @@ export default function Turno() {
   const servicePrice = discount ? discount.final : (service?.price ?? 0);
   const payName = (p: Payment | null) => (p ? PAYMENTS[p].name : '—');
   const payDesc = (p: Payment) =>
-    p === 'transferencia' ? (biz.transferAlias ? `Alias: ${biz.transferAlias}` : 'Te pasamos el alias por WhatsApp') : PAYMENTS[p].desc;
+    p === 'transferencia'
+      ? biz.transferAlias
+        ? `Alias: ${biz.transferAlias}`
+        : 'Te pasamos el alias por WhatsApp'
+      : p === 'mercadopago' && biz.mpLink
+        ? 'Al reservar te damos el link para pagar'
+        : PAYMENTS[p].desc;
 
   function go(n: number) {
     setError(null);
@@ -193,7 +200,8 @@ export default function Turno() {
     const prodNames = booked.products.map((p) => p.name);
     const text =
       `Hola ${short}! Soy ${clientName}. Confirmo mi turno: ${booked.serviceName} con ${booked.barberName}, ` +
-      `${booked.dayLabel} a las ${booked.time}. Pago: ${payName(booked.payment)}.` +
+      `${booked.dayLabel} a las ${booked.time}. Pago: ${payName(booked.payment)}` +
+      (booked.payment === 'transferencia' && biz.transferAlias ? ` (alias ${biz.transferAlias}).` : '.') +
       (prodNames.length ? ` Quiero sumar: ${prodNames.join(', ')}.` : '');
     const wa = biz.whatsapp ? enviarWhatsApp({ to: biz.whatsapp, text }).url : null;
     return (
@@ -210,6 +218,36 @@ export default function Turno() {
             Total {money(booked.total)}
             {booked.discountReason ? ` · ${booked.discountReason}` : ''}
           </span>
+          {booked.payment === 'transferencia' && biz.transferAlias && booked.total > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-[14px] bg-field px-4 py-3">
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[13px] font-light text-muted">Transferí {money(booked.total)} al alias</span>
+                <span className="truncate text-[17px] font-semibold">{biz.transferAlias}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(biz.transferAlias ?? '').then(() => setCopied(true)).catch(() => {});
+                }}
+                className="min-h-11 shrink-0 rounded-full border border-line-2 px-4 text-sm text-ink"
+              >
+                {copied ? 'Copiado' : 'Copiar'}
+              </button>
+            </div>
+          )}
+          {booked.payment === 'mercadopago' && biz.mpLink && booked.total > 0 && (
+            <a
+              href={biz.mpLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-[52px] items-center justify-center rounded-full border-[1.5px] border-accent text-base font-medium text-ink"
+            >
+              Pagar {money(booked.total)} con Mercado Pago
+            </a>
+          )}
+          <a href={`/api/client/ics?id=${booked.id}`} className="self-start text-sm text-muted underline">
+            Agregar a mi calendario
+          </a>
           {wa && !waSent ? (
             <>
               <WaLink
@@ -291,6 +329,7 @@ export default function Turno() {
                     >
                       <span className="text-xs">{DAY_SHORT[dow(d.day)]}</span>
                       <span className="text-xl leading-[1.1] font-semibold">{Number(d.day.slice(8))}</span>
+                      {d.closed && <span className="text-[10px] leading-none">{d.closed.length > 9 ? 'Cerrado' : d.closed}</span>}
                     </button>
                   );
                 })}
@@ -330,6 +369,7 @@ export default function Turno() {
                   on={draft.barberId === b.id && !isBusy}
                   disabled={isBusy}
                   onClick={() => setDraft({ barberId: b.id })}
+                  left={<Avatar name={b.name} src={b.photoUrl} />}
                   title={b.name}
                   right={
                     <span className="inline-flex items-center gap-2 text-sm text-soft">

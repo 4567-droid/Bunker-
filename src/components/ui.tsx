@@ -115,6 +115,7 @@ export function OptionRow({
   title,
   sub,
   right,
+  left,
   disabled,
   className = '',
 }: {
@@ -123,6 +124,7 @@ export function OptionRow({
   title: ReactNode;
   sub?: ReactNode;
   right?: ReactNode;
+  left?: ReactNode;
   disabled?: boolean;
   className?: string;
 }) {
@@ -135,12 +137,30 @@ export function OptionRow({
       className={`flex min-h-[68px] w-full items-center gap-3.5 rounded-2xl border-[1.5px] px-4 py-3 text-left text-ink transition-colors ${on ? 'border-accent bg-pick' : 'border-line bg-card'} ${disabled ? 'opacity-50' : ''} ${className}`}
     >
       <CheckCircle on={on} />
+      {left}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-[17px] font-medium">{title}</span>
         {sub && <span className="text-[13px] font-light text-muted">{sub}</span>}
       </span>
       {right}
     </button>
+  );
+}
+
+/** Foto redonda (o la inicial si no hay foto) */
+export function Avatar({ name, src, size = 44 }: { name: string; src?: string | null; size?: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-field font-semibold text-soft"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+      ) : (
+        name.charAt(0).toUpperCase()
+      )}
+    </span>
   );
 }
 

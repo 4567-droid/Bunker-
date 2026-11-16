@@ -23,6 +23,7 @@ import { api } from '@/lib/api-client';
 import { firstName, money } from '@/lib/format';
 import { addDays, DAY_SHORT, dayLabel, dow, toMin } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
+import { BlockForm, BlocksList, SectionTitle, type Block } from './shared';
 
 interface Service {
   id: string;
@@ -45,6 +46,7 @@ interface Row {
   status: string;
   source: string;
   confirmed: boolean;
+  reminded: boolean;
   total: number;
   discountReason: string | null;
   client: {
@@ -55,6 +57,8 @@ interface Row {
     stamps: number | null;
     nextFree: boolean;
     doubleStamp: boolean;
+    visits: number;
+    noShows: number;
   };
 }
 interface Agenda {
@@ -64,8 +68,9 @@ interface Agenda {
   goal: number;
   barber: { id: string; name: string };
   status: { state: 'free' | 'busy' | 'cutting'; freeInMin: number | null };
-  counters: { total: number; confirmed: number; done: number };
+  counters: { total: number; confirmed: number; done: number; noShow: number };
   rows: Row[];
+  blocks: (Block & { start: number; end: number })[];
   cutting: { id: string; leftMin: number; endTime: string } | null;
   next: { id: string; name: string; phone: string | null; time: string; newTime: string | null } | null;
 }
@@ -92,7 +97,7 @@ export function BarberPanel({ brand, services, today }: { brand: string; service
   }, []);
   if (staff === undefined) return <div className="p-8 text-muted">Cargando…</div>;
   if (!staff) return <BarberLogin brand={brand} onDone={setStaff} />;
-  return <BarberApp staff={staff} services={services} initialToday={today} onLogout={() => setStaff(null)} />;
+  return <BarberApp staff={staff} brand={brand} services={services} initialToday={today} onLogout={() => setStaff(null)} />;
 }
 
 function BarberLogin({ brand, onDone }: { brand: string; onDone: (s: Staff) => void }) {
@@ -132,7 +137,7 @@ function BarberLogin({ brand, onDone }: { brand: string; onDone: (s: Staff) => v
   );
 }
 
-function BarberApp({ staff, services, initialToday, onLogout }: { staff: Staff; services: Service[]; initialToday: string; onLogout: () => void }) {
+function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: Staff; brand: string; services: Service[]; initialToday: string; onLogout: () => void }) {
   const [tab, setTab] = useState('agenda');
   const [day, setDay] = useState(initialToday);
   const [agenda, setAgenda] = useState<Agenda | null>(null);
@@ -242,7 +247,7 @@ function BarberApp({ staff, services, initialToday, onLogout }: { staff: Staff; 
         {tab === 'agenda' && agenda && (
           <>
             <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-              {Array.from({ length: 7 }, (_, i) => addDays(today, i)).map((d, i) => (
+              {Array.from({ length: 14 }, (_, i) => addDays(today, i)).map((d, i) => (
                 <Chip key={d} size="sm" on={d === day} onClick={() => setDay(d)} className="shrink-0">
                   {i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : `${DAY_SHORT[dow(d)]} ${Number(d.slice(8))}`}
                 </Chip>
@@ -254,12 +259,23 @@ function BarberApp({ staff, services, initialToday, onLogout }: { staff: Staff; 
               <Stat value={agenda.counters.done} label="Atendidos" />
             </div>
             <Kicker className="px-1 pt-1">{day === today ? 'Mis turnos de hoy' : `Mis turnos · ${dayLabel(day)}`}</Kicker>
-            {agenda.rows.length === 0 && <span className="text-muted">No tenés turnos {day === today ? 'hoy' : 'ese día'}.</span>}
-            {agenda.rows.map((r) => {
+            {agenda.rows.length === 0 && agenda.blocks.length === 0 && <span className="text-muted">No tenés turnos {day === today ? 'hoy' : 'ese día'}.</span>}
+            {agenda.blocks
+              .filter((b) => b.allDay)
+              .map((b) => (
+                <BlockRow key={b.id} b={b} />
+              ))}
+            {[...agenda.rows.map((r) => ({ at: r.start, r, b: null })), ...agenda.blocks.filter((b) => !b.allDay).map((b) => ({ at: b.start, r: null, b }))]
+              .sort((x, y) => x.at - y.at)
+              .map(({ r, b }) => {
+              if (b) return <BlockRow key={b.id} b={b} />;
+              if (!r) return null;
               const on = r.id === sel;
               const st =
                 r.status === 'completed'
                   ? { t: r.source === 'fila' ? 'Sin turno · atendido' : 'Atendido', dot: '#6E6B63', c: 'text-dim' }
+                  : r.status === 'no_show'
+                    ? { t: 'No vino', dot: '#6E6B63', c: 'text-dim' }
                   : r.status === 'in_progress'
                     ? { t: 'Cortando', dot: RED, c: 'text-ink' }
                     : r.confirmed
@@ -309,7 +325,13 @@ function BarberApp({ staff, services, initialToday, onLogout }: { staff: Staff; 
                     Cobrar {money(selRow.total)}
                     {selRow.discountReason ? ` · ${selRow.discountReason}` : ''}
                   </span>
-                  {selRow.status !== 'completed' && selRow.source !== 'fila' && (
+                  {selRow.client.id && (
+                    <span className="text-sm font-light text-muted">
+                      {selRow.client.visits === 0 ? 'Primera vez en el local' : `${selRow.client.visits} ${selRow.client.visits === 1 ? 'visita' : 'visitas'}`}
+                      {selRow.client.noShows > 0 && <span className="text-bad"> · faltó {selRow.client.noShows} {selRow.client.noShows === 1 ? 'vez' : 'veces'}</span>}
+                    </span>
+                  )}
+                  {(selRow.status === 'booked' || selRow.status === 'in_progress') && selRow.source !== 'fila' && (
                     <span className="mt-1 inline-flex items-center gap-2 text-sm">
                       <Dot color={selRow.confirmed ? GREEN : 'var(--accent)'} size={8} glow={false} />
                       {selRow.confirmed ? 'Confirmó que viene' : 'Todavía no confirmó'}
@@ -353,10 +375,28 @@ function BarberApp({ staff, services, initialToday, onLogout }: { staff: Staff; 
                   </div>
                 )}
                 {cutting?.id === selRow.id && <span className="text-sm text-bad">Cortando ahora · terminás a las {cutting.endTime}</span>}
-                <PrimaryButton onClick={() => complete(selRow.id)} disabled={selRow.status === 'completed'} busy={busy} className="!text-base">
-                  {selRow.status === 'completed' ? 'Corte registrado' : 'Vino · marcar y sellar'}
-                </PrimaryButton>
-                {selRow.status !== 'completed' && (
+                {selRow.status === 'booked' && selRow.client.phone && isUpcoming(selRow, agenda) && (
+                  <ReminderButton row={selRow} agenda={agenda} brand={brand} me={staff.name} onSent={() => act('/api/barber/remind', { id: selRow.id })} />
+                )}
+                {selRow.status === 'no_show' ? (
+                  <span className="text-sm text-muted">Marcado como ausente: el horario quedó libre.</span>
+                ) : (
+                  <PrimaryButton onClick={() => complete(selRow.id)} disabled={selRow.status === 'completed'} busy={busy} className="!text-base">
+                    {selRow.status === 'completed' ? 'Corte registrado' : 'Vino · marcar y sellar'}
+                  </PrimaryButton>
+                )}
+                {selRow.status === 'booked' && !isUpcoming(selRow, agenda) && (
+                  <GhostButton
+                    small
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`¿Marcar que ${selRow.clientName} no vino?`)) act('/api/barber/noshow', { id: selRow.id }, 'Anotado: no vino. El horario quedó libre.');
+                    }}
+                  >
+                    No vino
+                  </GhostButton>
+                )}
+                {(selRow.status === 'booked' || selRow.status === 'in_progress') && (
                   <GhostButton
                     small
                     disabled={busy}
@@ -412,6 +452,7 @@ function BarberApp({ staff, services, initialToday, onLogout }: { staff: Staff; 
             ) : (
               <CuttingCard agenda={agenda} me={staff.name} busy={busy} onFinish={() => complete()} />
             )}
+            <MyBlocks today={today} onChange={(msg) => { setOk(msg); loadAgenda(day); }} />
           </>
         )}
 
@@ -652,6 +693,90 @@ function ClientsTab({ onLogout }: { onLogout: () => void }) {
       <GhostButton small onClick={onLogout} className="mt-3 self-start">
         Salir
       </GhostButton>
+    </div>
+  );
+}
+
+function BlockRow({ b }: { b: Block }) {
+  return (
+    <div className="flex min-h-12 items-center gap-3.5 rounded-2xl border border-dashed border-dash px-4 py-2 text-muted">
+      <span className="min-w-[52px] text-[15px] font-medium">{b.allDay ? 'Todo' : b.from}</span>
+      <span className="flex-1 text-sm">
+        {b.barberId ? 'Bloqueado' : 'Local cerrado'}
+        {b.allDay ? ' todo el día' : ` hasta las ${b.to}`}
+        {b.reason ? ` · ${b.reason}` : ''}
+      </span>
+    </div>
+  );
+}
+
+/** El turno todavía no empezó (se puede recordar) o ya pasó la hora (se puede marcar "No vino") */
+function isUpcoming(r: Row, agenda: Agenda): boolean {
+  if (agenda.day !== agenda.today) return agenda.day > agenda.today;
+  return r.start > toMin(agenda.now);
+}
+
+function ReminderButton({ row, agenda, brand, me, onSent }: { row: Row; agenda: Agenda; brand: string; me: string; onSent: () => void }) {
+  const when =
+    agenda.day === agenda.today ? 'hoy' : agenda.day === addDays(agenda.today, 1) ? 'mañana' : `el ${dayLabel(agenda.day).toLowerCase()}`;
+  const link = typeof window !== 'undefined' ? `${window.location.origin}/cuenta` : '';
+  const text =
+    `Hola ${firstName(row.clientName)}! Te recordamos tu turno en ${brand}: ${when} a las ${row.time} con ${me} (${row.serviceName}). ` +
+    `Confirmá tu asistencia acá: ${link} . Si no podés venir, avisanos por este medio.`;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <WaLink href={enviarWhatsApp({ to: row.client.phone, text }).url} onClick={onSent} className="!min-h-[50px] !text-[15px]">
+        {row.reminded ? 'Recordar de nuevo por WhatsApp' : 'Recordar turno por WhatsApp'}
+      </WaLink>
+      {row.reminded && <span className="px-1 text-xs text-muted">Ya le mandaste el recordatorio.</span>}
+    </div>
+  );
+}
+
+function MyBlocks({ today, onChange }: { today: string; onChange: (msg: string) => void }) {
+  const [blocks, setBlocks] = useState<Block[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    api<{ blocks: Block[] }>('/api/barber/blocks').then((r) => setBlocks(r.blocks)).catch(() => setBlocks([]));
+  }, []);
+  useEffect(load, [load]);
+  return (
+    <div className="flex flex-col gap-2.5">
+      <SectionTitle>Horarios bloqueados</SectionTitle>
+      <span className="px-1 text-sm font-light text-muted">Almuerzo, franco o vacaciones: en esos horarios nadie te puede reservar.</span>
+      <ErrorNote text={error} />
+      {blocks && (
+        <BlocksList
+          blocks={blocks}
+          empty="No tenés horarios bloqueados."
+          canDelete={(b) => !!b.mine}
+          onDelete={async (b) => {
+            setError(null);
+            try {
+              await api('/api/barber/block/delete', { id: b.id });
+              load();
+              onChange('Bloqueo quitado: ese horario vuelve a estar disponible.');
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      )}
+      {open ? (
+        <BlockForm
+          endpoint="/api/barber/block"
+          today={today}
+          reasons={['Almuerzo', 'Franco', 'Trámite', 'Vacaciones']}
+          onDone={(msg) => {
+            setOpen(false);
+            load();
+            onChange(msg);
+          }}
+        />
+      ) : (
+        <GhostButton onClick={() => setOpen(true)}>Bloquear un horario</GhostButton>
+      )}
     </div>
   );
 }

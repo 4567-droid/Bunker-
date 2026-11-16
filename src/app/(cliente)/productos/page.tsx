@@ -19,7 +19,11 @@ export default function Productos() {
       {config.products.map((p) => {
         const on = chosen.includes(p.id);
         return (
-          <article key={p.id} className={`flex flex-col gap-2.5 rounded-[20px] border-[1.5px] bg-card px-5 py-[18px] ${on ? 'border-accent' : 'border-line'}`}>
+          <article key={p.id} className={`flex flex-col gap-2.5 overflow-hidden rounded-[20px] border-[1.5px] bg-card px-5 py-[18px] ${on ? 'border-accent' : 'border-line'}`}>
+            {p.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.imageUrl} alt={p.name} loading="lazy" className="-mx-5 -mt-[18px] mb-1 aspect-[4/3] w-[calc(100%+40px)] max-w-none object-cover" />
+            )}
             <div className="flex items-baseline justify-between gap-2.5">
               <h2 className="m-0 text-lg font-medium">{p.name}</h2>
               <span className="text-sm font-medium text-accent">{p.price !== null ? money(p.price) : 'Consultar'}</span>

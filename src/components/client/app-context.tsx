@@ -28,6 +28,19 @@ export interface Appt {
   total: number;
   waSent: boolean;
   confirmed: boolean;
+  reminded?: boolean;
+}
+
+export interface PastCut {
+  id: string;
+  dayLabel: string;
+  serviceName: string;
+  barberName: string;
+  status: string;
+  stampsAdded: number;
+  free: boolean;
+  discountPct: number;
+  paid: number;
 }
 
 export interface Me {
@@ -45,6 +58,7 @@ export interface Me {
     nextFree: boolean;
   } | null;
   upcoming?: Appt[];
+  history?: PastCut[];
   rewards?: { id: string; kind: string; percent: number; status: string; from: string | null }[];
   referrals?: { invited: number; rewarded: number };
   queue?: { id: string; status: string; position: number; waitMin: number } | null;

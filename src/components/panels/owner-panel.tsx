@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { BottomNav, Chip, ErrorNote, Field, GhostButton, Kicker, LoginShell, OkNote, PrimaryButton, type NavTab } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { money } from '@/lib/format';
-import { DAY_LONG, type Hours } from '@/lib/time';
+import { addDays, DAY_LONG, DAY_SHORT, dow, type Hours } from '@/lib/time';
+import { enviarWhatsApp } from '@/lib/whatsapp';
+import { BlockForm, BlocksList, PhotoPicker, type Block } from './shared';
 
 interface MoneyRow {
   id: string;
@@ -57,7 +59,10 @@ const HEADINGS: Record<string, string> = {
   gastos: 'Gastos',
   estimado: 'Estimado del mes',
   ajustes: 'Ajustes',
+  agenda: 'Turnos',
+  clientes: 'Clientes',
 };
+const NO_MONTH = ['ajustes', 'agenda', 'clientes'];
 const GREEN = '#4CC26A';
 const RED = '#E0533D';
 
@@ -142,13 +147,13 @@ function OwnerApp({ isOwner, onLogout }: { isOwner: boolean; onLogout: () => voi
       <header className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-4 pt-5 pb-1">
         <span className="flex flex-col leading-tight">
           <span className="flex items-center gap-1 text-[13px] tracking-[.18em] text-muted uppercase">
-            {f && tab !== 'ajustes' && (
+            {f && !NO_MONTH.includes(tab) && (
               <button type="button" aria-label="Mes anterior" onClick={() => setMonth(shiftMonth(f.month, -1))} className="-ml-2 min-h-9 px-2 text-muted">
                 ‹
               </button>
             )}
             Central{f ? ` · ${f.monthLabel}` : ''}
-            {f && tab !== 'ajustes' && !f.isCurrent && (
+            {f && !NO_MONTH.includes(tab) && !f.isCurrent && (
               <button type="button" aria-label="Mes siguiente" onClick={() => setMonth(shiftMonth(f.month, 1))} className="min-h-9 px-2 text-muted">
                 ›
               </button>
@@ -162,12 +167,14 @@ function OwnerApp({ isOwner, onLogout }: { isOwner: boolean; onLogout: () => voi
       </header>
       <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-3.5 px-4 pt-3 pb-6">
         <ErrorNote text={error} />
-        {!f && tab !== 'ajustes' && <span className="text-muted">Cargando…</span>}
+        {!f && !NO_MONTH.includes(tab) && <span className="text-muted">Cargando…</span>}
         {f && tab === 'resumen' && <Resumen f={f} go={setTab} />}
         {f && tab === 'ingresos' && <Ingresos f={f} reload={load} />}
         {f && tab === 'gastos' && <Gastos f={f} reload={load} />}
         {f && tab === 'estimado' && <Estimado f={f} reload={load} />}
         {tab === 'ajustes' && <Ajustes isOwner={isOwner} onSaved={load} />}
+        {tab === 'agenda' && <DayAgenda />}
+        {tab === 'clientes' && <ClientsList />}
       </main>
       <BottomNav tabs={TABS} active={tab} onPick={setTab} maxWidth={560} />
     </div>
@@ -207,6 +214,14 @@ function MoneyList({ rows, onDelete }: { rows: MoneyRow[]; onDelete?: (r: MoneyR
 function Resumen({ f, go }: { f: Finance; go: (t: string) => void }) {
   return (
     <>
+      <div className="grid grid-cols-2 gap-2.5">
+        <button type="button" onClick={() => go('agenda')} className="flex min-h-[52px] items-center justify-center rounded-full border border-line-2 bg-card text-[15px] font-medium text-ink">
+          Turnos de hoy
+        </button>
+        <button type="button" onClick={() => go('clientes')} className="flex min-h-[52px] items-center justify-center rounded-full border border-line-2 bg-card text-[15px] font-medium text-ink">
+          Clientes
+        </button>
+      </div>
       <section className="flex flex-col gap-1 rounded-3xl bg-accent p-[22px] text-bg">
         <span className="text-[13px] font-semibold tracking-[.16em]">{f.isCurrent ? 'GANANCIA HASTA HOY' : 'GANANCIA DEL MES'}</span>
         <span className="text-[38px] leading-[1.1] font-bold">{money(f.profit)}</span>
@@ -486,6 +501,8 @@ interface Settings {
     instagram: string | null;
     mapsUrl: string | null;
     transferAlias: string | null;
+    mpLink: string | null;
+    heroUrl: string | null;
     hours: Hours;
     slotStep: number;
     bookingDays: number;
@@ -495,9 +512,9 @@ interface Settings {
     referralPercent: number;
     monthlyGoal: number;
   };
-  barbers: { id: string; name: string; instagram: string | null; active: boolean }[];
+  barbers: { id: string; name: string; instagram: string | null; photoUrl: string | null; active: boolean }[];
   services: { id: string; name: string; duration: number; price: number; active: boolean }[];
-  products: { id: string; name: string; description: string | null; price: number | null; active: boolean }[];
+  products: { id: string; name: string; description: string | null; price: number | null; imageUrl: string | null; active: boolean }[];
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -571,6 +588,7 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
         <Small label="Instagram" value={biz.instagram ?? ''} onChange={(v) => set({ instagram: v })} />
         <Small label="Link de Google Maps" value={biz.mapsUrl ?? ''} onChange={(v) => set({ mapsUrl: v })} />
         <Small label="Alias para transferencias" value={biz.transferAlias ?? ''} onChange={(v) => set({ transferAlias: v })} />
+        <Small label="Link de pago de Mercado Pago" value={biz.mpLink ?? ''} onChange={(v) => set({ mpLink: v })} placeholder="https://link.mercadopago.com.ar/..." />
       </Section>
 
       <Section title="Horarios de atención">
@@ -616,6 +634,24 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
       </Section>
       <PrimaryButton onClick={() => save('/api/owner/business', biz, 'Datos, horarios y reglas guardados.')}>Guardar datos, horarios y reglas</PrimaryButton>
 
+      <Section title="Foto de portada">
+        <span className="text-[13px] font-light text-muted">Se ve de fondo en el inicio de la web. Mejor una foto del local, horizontal y oscura.</span>
+        <PhotoPicker
+          current={biz.heroUrl}
+          label="Subir foto"
+          max={1600}
+          shape="wide"
+          onUpload={async (data) => {
+            await save('/api/owner/image', { target: 'hero', data }, 'Foto de portada actualizada.');
+          }}
+          onRemove={async () => {
+            await save('/api/owner/image/delete', { target: 'hero' }, 'Foto de portada quitada.');
+          }}
+        />
+      </Section>
+
+      <ClosedDays barbers={s.barbers.filter((b) => b.active)} />
+
       <Section title="Barberos">
         {s.barbers.map((b) => (
           <BarberRow key={b.id} b={b} save={save} />
@@ -654,6 +690,18 @@ function BarberRow({ b, save }: { b: Settings['barbers'][number]; save: Save }) 
           {b.active ? 'Activo' : 'Inactivo'}
         </Chip>
       </div>
+      <PhotoPicker
+        current={b.photoUrl}
+        label="Subir foto"
+        shape="round"
+        max={600}
+        onUpload={async (data) => {
+          await save('/api/owner/image', { target: 'barber', id: b.id, data }, `Foto de ${b.name} actualizada.`);
+        }}
+        onRemove={async () => {
+          await save('/api/owner/image/delete', { target: 'barber', id: b.id }, `Foto de ${b.name} quitada.`);
+        }}
+      />
       <div className="flex items-end gap-2">
         <Small label="Nuevo código" type="password" value={code} onChange={setCode} placeholder="Mínimo 4" />
         <GhostButton
@@ -740,6 +788,19 @@ function ProductRow({ p, save }: { p?: Settings['products'][number]; save: Save 
   return (
     <div className="flex flex-col gap-2 border-b border-field pb-2.5 last:border-0">
       {isNew && <span className="text-[13px] text-muted">Nuevo producto</span>}
+      {p && (
+        <PhotoPicker
+          current={p.imageUrl}
+          label="Subir foto"
+          max={800}
+          onUpload={async (data) => {
+            await save('/api/owner/image', { target: 'product', id: p.id, data }, `Foto de ${p.name} actualizada.`);
+          }}
+          onRemove={async () => {
+            await save('/api/owner/image/delete', { target: 'product', id: p.id }, `Foto de ${p.name} quitada.`);
+          }}
+        />
+      )}
       <Small label="Nombre" value={name} onChange={setName} />
       <Small label="Para qué sirve" value={description} onChange={setDescription} />
       <Small label="Precio $ (vacío = consultar)" type="number" value={price} onChange={setPrice} />
@@ -803,5 +864,240 @@ function PasswordForm() {
         Cambiar contraseña
       </GhostButton>
     </Section>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Días cerrados (feriados) y vacaciones de los barberos
+// ---------------------------------------------------------------------
+function ClosedDays({ barbers }: { barbers: { id: string; name: string }[] }) {
+  const [data, setData] = useState<{ today: string; blocks: Block[] } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    api<{ today: string; blocks: Block[] }>('/api/owner/blocks').then(setData).catch((e) => setError((e as Error).message));
+  }, []);
+  useEffect(load, [load]);
+  return (
+    <Section title="Feriados, vacaciones y horarios bloqueados">
+      <span className="text-[13px] font-light text-muted">
+        Cerrá el local un día (feriado) o bloqueá a un barbero (vacaciones, franco). En esos horarios la web no deja reservar.
+      </span>
+      <OkNote text={msg} />
+      <ErrorNote text={error} />
+      {data && (
+        <BlocksList
+          blocks={data.blocks}
+          empty="No hay días ni horarios bloqueados."
+          canDelete={() => true}
+          onDelete={async (b) => {
+            setError(null);
+            setMsg(null);
+            try {
+              await api('/api/owner/blocks/delete', { id: b.id });
+              setMsg('Bloqueo quitado.');
+              load();
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      )}
+      {data && open ? (
+        <BlockForm
+          endpoint="/api/owner/blocks"
+          today={data.today}
+          barbers={barbers}
+          reasons={['Feriado', 'Vacaciones', 'Franco', 'Evento']}
+          onDone={(m) => {
+            setOpen(false);
+            setMsg(m);
+            load();
+          }}
+        />
+      ) : (
+        <GhostButton onClick={() => setOpen(true)}>Bloquear días u horarios</GhostButton>
+      )}
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Turnos del día de todos los barberos
+// ---------------------------------------------------------------------
+interface OwnerAgenda {
+  day: string;
+  dayLabel: string;
+  today: string;
+  days: string[];
+  barbers: {
+    id: string;
+    name: string;
+    rows: { id: string; time: string; clientName: string; clientPhone: string; serviceName: string; status: string; source: string; confirmed: boolean; total: number }[];
+    blocks: Block[];
+  }[];
+  closures: Block[];
+  totals: { booked: number; done: number; noShow: number; amount: number };
+}
+
+const STATUS_TEXT: Record<string, string> = {
+  booked: 'Reservado',
+  in_progress: 'Cortando',
+  completed: 'Atendido',
+  no_show: 'No vino',
+};
+
+function DayAgenda() {
+  const [day, setDay] = useState<string | null>(null);
+  const [a, setA] = useState<OwnerAgenda | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api<OwnerAgenda>(`/api/owner/agenda${day ? `?day=${day}` : ''}`).then(setA).catch((e) => setError((e as Error).message));
+  }, [day]);
+  if (!a) return error ? <ErrorNote text={error} /> : <span className="text-muted">Cargando…</span>;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+        {a.days.map((d) => (
+          <Chip key={d} size="sm" on={d === a.day} onClick={() => setDay(d)} className="shrink-0">
+            {d === a.today ? 'Hoy' : d === addDays(a.today, 1) ? 'Mañana' : d === addDays(a.today, -1) ? 'Ayer' : `${DAY_SHORT[dow(d)]} ${Number(d.slice(8))}`}
+          </Chip>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat value={a.totals.booked} label="Por venir" />
+        <MiniStat value={a.totals.done} label="Atendidos" />
+        <MiniStat value={a.totals.noShow} label="No vinieron" />
+      </div>
+      <span className="px-1 text-sm font-light text-muted">
+        {a.dayLabel} · {money(a.totals.amount)} entre turnos y productos
+      </span>
+      {a.closures.map((c) => (
+        <span key={c.id} className="rounded-2xl border border-dashed border-dash px-4 py-3 text-sm text-muted">
+          Local cerrado {c.allDay ? 'todo el día' : `de ${c.from} a ${c.to}`}
+          {c.reason ? ` · ${c.reason}` : ''}
+        </span>
+      ))}
+      {a.barbers.map((b) => (
+        <Section key={b.id} title={`${b.name} · ${plural(b.rows.filter((r) => r.source !== 'fila').length, 'turno', 'turnos')}`}>
+          {b.blocks.map((x) => (
+            <span key={x.id} className="text-[13px] text-muted">
+              Bloqueado {x.allDay ? 'todo el día' : `de ${x.from} a ${x.to}`}
+              {x.reason ? ` · ${x.reason}` : ''}
+            </span>
+          ))}
+          {b.rows.length === 0 && <span className="text-sm text-muted">Sin turnos.</span>}
+          {b.rows.map((r) => (
+            <div key={r.id} className="flex items-center gap-3 border-b border-field py-2 last:border-0">
+              <span className="min-w-[48px] text-[15px] font-semibold">{r.time}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className={`truncate text-[15px] ${r.status === 'no_show' ? 'text-dim line-through' : ''}`}>{r.clientName}</span>
+                <span className="truncate text-xs font-light text-muted">
+                  {r.serviceName}
+                  {r.clientPhone ? ` · ${r.clientPhone}` : ''}
+                </span>
+              </span>
+              <span className="flex shrink-0 flex-col items-end">
+                <span className="text-[13px]">{money(r.total)}</span>
+                <span className="text-[11px] text-muted">
+                  {r.source === 'fila' ? 'Sin turno' : r.status === 'booked' && r.confirmed ? 'Confirmó' : STATUS_TEXT[r.status] ?? r.status}
+                </span>
+              </span>
+            </div>
+          ))}
+        </Section>
+      ))}
+    </div>
+  );
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function MiniStat({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-line bg-card py-3">
+      <span className="text-[22px] font-semibold">{value}</span>
+      <span className="text-[11px] text-muted">{label}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Clientes del negocio
+// ---------------------------------------------------------------------
+interface ClientItem {
+  id: string;
+  name: string;
+  phone: string;
+  phoneDisplay: string;
+  email: string | null;
+  stamps: number;
+  visits: number;
+  lastVisitOn: string | null;
+  noShows: number;
+  invited: number;
+  nextDay: string | null;
+}
+
+function ClientsList() {
+  const [q, setQ] = useState('');
+  const [data, setData] = useState<{ goal: number; total: number; clients: ClientItem[] } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api<{ goal: number; total: number; clients: ClientItem[] }>(`/api/owner/clients?q=${encodeURIComponent(q)}`)
+        .then(setData)
+        .catch(() => setData({ goal: 10, total: 0, clients: [] }));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  const fmt = (d: string | null) => (d ? `${Number(d.slice(8))}/${Number(d.slice(5, 7))}` : '—');
+  return (
+    <div className="flex flex-col gap-2.5">
+      <Field id="oq" label="Buscar" placeholder="Buscar por nombre, teléfono o correo" value={q} onChange={setQ} />
+      <div className="flex items-center justify-between px-1">
+        <span className="text-sm text-muted">{data ? `${data.total}${data.total === 500 ? '+' : ''} clientes` : 'Cargando…'}</span>
+        <a href={`/api/owner/clients?format=csv&q=${encodeURIComponent(q)}`} className="text-sm text-accent underline">
+          Descargar planilla (Excel)
+        </a>
+      </div>
+      {data?.clients.map((c) => (
+        <div key={c.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-card px-4 py-3">
+          <button type="button" onClick={() => setOpen(open === c.id ? null : c.id)} className="flex items-center gap-3 bg-transparent p-0 text-left text-ink" aria-expanded={open === c.id}>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-base font-medium">{c.name}</span>
+              <span className="truncate text-[13px] font-light text-muted">
+                {c.visits} {c.visits === 1 ? 'visita' : 'visitas'} · último corte {fmt(c.lastVisitOn)}
+                {c.noShows ? ` · faltó ${c.noShows}` : ''}
+              </span>
+            </span>
+            <span className="text-base font-semibold text-accent">
+              {Math.min(c.stamps, (data?.goal ?? 10) - 1)}/{data?.goal ?? 10}
+            </span>
+          </button>
+          {open === c.id && (
+            <div className="flex flex-col gap-1.5 border-t border-field pt-2 text-sm font-light text-soft">
+              <a href={`tel:${c.phone}`} className="underline">
+                {c.phoneDisplay}
+              </a>
+              {c.email && <span>{c.email}</span>}
+              <span>Próximo turno: {c.nextDay ? fmt(c.nextDay) : 'ninguno'}</span>
+              <span>Invitó a {c.invited} {c.invited === 1 ? 'amigo' : 'amigos'}</span>
+              <a
+                href={enviarWhatsApp({ to: c.phone, text: `Hola ${c.name.split(' ')[0]}! ` }).url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent underline"
+              >
+                Escribirle por WhatsApp
+              </a>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }

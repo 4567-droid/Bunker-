@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useApp, type Appt } from '@/components/client/app-context';
 import { AuthFields, authValid, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
-import { Card, Dot, ErrorNote, GhostButton, GREEN, Kicker, PrimaryButton, WaLink } from '@/components/ui';
+import { Card, Dot, ErrorNote, Field, GhostButton, GREEN, Kicker, OkNote, PrimaryButton, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { money, PAYMENTS } from '@/lib/format';
 import { enviarWhatsApp } from '@/lib/whatsapp';
@@ -67,16 +67,21 @@ function NextAppt({ a, onChange }: { a: Appt; onChange: () => Promise<void> }) {
           </PrimaryButton>
         ))}
       {a.status === 'booked' && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            if (window.confirm('¿Cancelar este turno?')) run('/api/client/cancel');
-          }}
-          className="inline-flex min-h-11 items-center self-start text-sm text-muted underline"
-        >
-          Cancelar turno
-        </button>
+        <div className="flex flex-wrap gap-x-5">
+          <a href={`/api/client/ics?id=${a.id}`} className="inline-flex min-h-11 items-center text-sm text-muted underline">
+            Agregar a mi calendario
+          </a>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (window.confirm('¿Cancelar este turno?')) run('/api/client/cancel');
+            }}
+            className="inline-flex min-h-11 items-center text-sm text-muted underline"
+          >
+            Cancelar turno
+          </button>
+        </div>
       )}
       <ErrorNote text={error} />
     </div>
@@ -199,9 +204,106 @@ export default function Cuenta() {
         </span>
       </Link>
 
+      {(me.history?.length ?? 0) > 0 && (
+        <Card className="gap-1 px-5 py-[18px]">
+          <Kicker>Mis últimos cortes</Kicker>
+          {me.history!.map((h) => (
+            <div key={h.id} className="flex items-center gap-3 border-b border-field py-2.5 last:border-0">
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className={`text-[15px] ${h.status === 'no_show' ? 'text-dim' : ''}`}>{h.dayLabel}</span>
+                <span className="truncate text-[13px] font-light text-muted">
+                  {h.serviceName} con {h.barberName}
+                </span>
+              </span>
+              <span className="shrink-0 text-right text-[13px]">
+                {h.status === 'no_show' ? (
+                  <span className="text-dim">No fuiste</span>
+                ) : h.free ? (
+                  <span className="text-accent">Gratis</span>
+                ) : h.stampsAdded ? (
+                  <span className="text-accent">+{h.stampsAdded} {h.stampsAdded === 1 ? 'sello' : 'sellos'}</span>
+                ) : (
+                  <span className="text-muted">Atendido</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      <MyData />
+
       <GhostButton small onClick={logout} className="self-start">
         Cerrar sesión
       </GhostButton>
     </div>
+  );
+}
+
+/** Editar nombre y correo, y borrar la cuenta (los datos personales son del cliente) */
+function MyData() {
+  const { me, setMe, resetDraft } = useApp();
+  const c = me?.client;
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(c?.name ?? '');
+  const [email, setEmail] = useState(c?.email ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  if (!c) return null;
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    setOk(null);
+    try {
+      setMe(await api('/api/client/update', { name, email }));
+      setOk('Datos guardados.');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!window.confirm('¿Borrar tu cuenta? Se cancelan tus turnos y perdés los sellos de la tarjeta. No se puede deshacer.')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api('/api/client/delete', { confirm: true });
+      resetDraft();
+      setMe({ client: null });
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-11 items-center self-start px-1 text-sm text-muted underline">
+        Editar mis datos
+      </button>
+    );
+  }
+  return (
+    <Card className="gap-2.5 px-5 py-[18px]">
+      <Kicker>Mis datos</Kicker>
+      <Field id="md-name" label="Nombre y apellido" value={name} onChange={setName} autoComplete="name" />
+      <Field id="md-email" label="Correo (opcional)" type="email" inputMode="email" value={email} onChange={setEmail} autoComplete="email" />
+      <span className="px-1 text-[13px] font-light text-muted">
+        El teléfono ({c.phoneDisplay}) es tu forma de entrar: para cambiarlo, escribile a la barbería.
+        {c.email ? ' Si cambiás el correo, la próxima vez entrás con el nuevo.' : ''}
+      </span>
+      <ErrorNote text={error} />
+      <OkNote text={ok} />
+      <PrimaryButton onClick={save} busy={busy} disabled={name.trim().split(/\s+/).length < 2} className="!text-base">
+        Guardar
+      </PrimaryButton>
+      <button type="button" onClick={remove} disabled={busy} className="inline-flex min-h-11 items-center self-start text-sm text-bad underline">
+        Borrar mi cuenta
+      </button>
+    </Card>
   );
 }

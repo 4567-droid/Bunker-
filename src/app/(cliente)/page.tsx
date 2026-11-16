@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/components/client/app-context';
-import { Card, Dot, GREEN, Icon, Kicker, RED, Scissors } from '@/components/ui';
+import { Avatar, Card, Dot, GREEN, Icon, Kicker, RED, Scissors } from '@/components/ui';
 import { money } from '@/lib/format';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 import { dayLabel, hoursSummary } from '@/lib/time';
@@ -26,6 +26,7 @@ function ChairArt() {
 
 export default function Inicio() {
   const { config, me, live, draft, referral } = useApp();
+  const photos = Object.fromEntries(config.barbers.filter((b) => b.photoUrl).map((b) => [b.id, b.photoUrl as string]));
   const router = useRouter();
   const biz = config.business;
   const short = biz.name.split(/\s+/)[0];
@@ -134,7 +135,10 @@ export default function Inicio() {
                     : 'Libre';
               return (
                 <div key={b.id} className="flex items-center justify-between gap-3">
-                  <span className="text-[17px] font-medium">{b.name}</span>
+                  <span className="flex items-center gap-3 text-[17px] font-medium">
+                    {photos[b.id] && <Avatar name={b.name} src={photos[b.id]} size={36} />}
+                    {b.name}
+                  </span>
                   <span className="inline-flex items-center gap-2 text-sm text-soft">
                     <Dot color={busy ? RED : GREEN} />
                     {status}
