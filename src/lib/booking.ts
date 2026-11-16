@@ -4,7 +4,7 @@ import type { Tx } from './db';
 import { fail } from './http';
 import { freeSlots, nextIsFree, projectShift, queueWait, stampOutcome, type BusyBlock } from './rules';
 import type { ClientRow } from './session';
-import { addDays, closesAt, dayLabel, fmtMin, isDay, isOpenAt, isOpenDay, nextOpening, nowIn, rangesFor, type Now } from './time';
+import { addDays, closesAt, dayLabel, fmtMin, isDay, isOpenAt, isOpenDay, nextOpening, nowIn, rangesFor, type Cuts, type Now } from './time';
 import type { Payment } from './format';
 import { PAYMENTS } from './format';
 
@@ -30,6 +30,7 @@ export interface BarberRow {
   id: string;
   name: string;
   instagram: string | null;
+  photo_url: string | null;
 }
 
 export interface ApptRow {
@@ -62,6 +63,7 @@ export interface ApptRow {
   started_at: Date | null;
   est_end_at: Date | null;
   completed_at: Date | null;
+  reminded_at: Date | null;
   created_at: Date;
 }
 
@@ -75,7 +77,7 @@ export const bizNow = (biz: Business): Now => {
 };
 
 export async function activeBarbers(tx: Tx, bizId: string): Promise<BarberRow[]> {
-  return tx<BarberRow[]>`select id, name, instagram from staff
+  return tx<BarberRow[]>`select id, name, instagram, photo_url from staff
                          where business_id = ${bizId} and role = 'barber' and active
                          order by sort, name`;
 }
@@ -95,24 +97,73 @@ export async function getService(tx: Tx, bizId: string, id: unknown): Promise<Se
 
 type DayBusy = BusyBlock & { day: string };
 
-async function busyBlocks(tx: Tx, bizId: string, from: string, to: string): Promise<DayBusy[]> {
+export interface BlockRow {
+  id: string;
+  barber_id: string | null;
+  day: string;
+  start_min: number;
+  end_min: number;
+  reason: string | null;
+}
+
+/**
+ * Turnos y bloqueos entre dos días.
+ *  - busy: lo que ocupa a cada barbero (turnos + sus bloqueos)
+ *  - cuts: tramos en que cierra todo el local (feriados) → se restan del horario
+ */
+async function agendaLoad(tx: Tx, bizId: string, from: string, to: string): Promise<{ busy: DayBusy[]; cuts: Cuts; closedReason: Record<string, string> }> {
   const rows = await tx<{ barber_id: string; day: string; start_min: number; end_min: number }[]>`
     select barber_id, day, start_min, end_min from appointments
     where business_id = ${bizId} and day between ${from} and ${to}
       and status in ('booked', 'in_progress', 'completed') and source <> 'fila'`;
-  return rows.map((r) => ({ barberId: r.barber_id, day: r.day, start: r.start_min, end: r.end_min }));
+  const blocks = await loadBlocks(tx, bizId, from, to);
+  const busy: DayBusy[] = rows.map((r) => ({ barberId: r.barber_id, day: r.day, start: r.start_min, end: r.end_min }));
+  const cuts: Cuts = {};
+  const closedReason: Record<string, string> = {};
+  for (const b of blocks) {
+    if (b.barber_id) busy.push({ barberId: b.barber_id, day: b.day, start: b.start_min, end: b.end_min });
+    else {
+      (cuts[b.day] ??= []).push([b.start_min, b.end_min]);
+      if (b.start_min === 0 && b.end_min === 1440) closedReason[b.day] = b.reason || 'Cerrado';
+    }
+  }
+  return { busy, cuts, closedReason };
 }
 
-function slotsFor(biz: Business, now: Now, day: string, duration: number, barberIds: string[], busy: DayBusy[], opts: { anyTime?: boolean } = {}) {
+export async function loadBlocks(tx: Tx, bizId: string, from: string, to: string): Promise<BlockRow[]> {
+  return tx<BlockRow[]>`
+    select id, barber_id, day, start_min, end_min, reason from blocks
+    where business_id = ${bizId} and day between ${from} and ${to}
+    order by day, start_min`;
+}
+
+/** Cierres del local (feriados) de los próximos días, para saber si está abierto */
+export async function businessCuts(tx: Tx, bizId: string, from: string, days = 15): Promise<Cuts> {
+  const cuts: Cuts = {};
+  for (const b of await loadBlocks(tx, bizId, from, addDays(from, days))) {
+    if (!b.barber_id) (cuts[b.day] ??= []).push([b.start_min, b.end_min]);
+  }
+  return cuts;
+}
+
+/**
+ * Un solo cambio de agenda por negocio y día a la vez: así un turno nuevo y un bloqueo
+ * que se cargan en el mismo segundo no se pisan (los turnos entre sí ya los frena la base).
+ */
+export async function lockDay(tx: Tx, bizId: string, day: string): Promise<void> {
+  await tx`select pg_advisory_xact_lock(hashtext(${'bk:' + bizId + ':' + day}))`;
+}
+
+function slotsFor(biz: Business, now: Now, day: string, duration: number, barberIds: string[], load: { busy: DayBusy[]; cuts: Cuts }, opts: { anyTime?: boolean } = {}) {
   const last = addDays(now.day, biz.booking_days - 1);
   if (day < now.day || (!opts.anyTime && day > last)) return [];
   const minStart = day === now.day ? now.min + (opts.anyTime ? 0 : biz.min_advance_min) : 0;
   return freeSlots({
-    ranges: rangesFor(biz.hours, day),
+    ranges: rangesFor(biz.hours, day, load.cuts),
     step: biz.slot_step,
     duration,
     barberIds,
-    busy: busy.filter((b) => b.day === day),
+    busy: load.busy.filter((b) => b.day === day),
     minStart,
   });
 }
@@ -122,12 +173,13 @@ export async function listDays(tx: Tx, biz: Business, service: ServiceRow, now: 
   const barbers = await activeBarbers(tx, biz.id);
   const ids = barbers.map((b) => b.id);
   const last = addDays(now.day, biz.booking_days - 1);
-  const busy = await busyBlocks(tx, biz.id, now.day, last);
-  const out: { day: string; available: boolean }[] = [];
+  const load = await agendaLoad(tx, biz.id, now.day, last);
+  const out: { day: string; available: boolean; closed: string | null }[] = [];
   for (let i = 0; i < biz.booking_days; i++) {
     const day = addDays(now.day, i);
     if (!isOpenDay(biz.hours, day)) continue;
-    out.push({ day, available: slotsFor(biz, now, day, service.duration_min, ids, busy).length > 0 });
+    const closed = load.closedReason[day] ?? null;
+    out.push({ day, available: !closed && slotsFor(biz, now, day, service.duration_min, ids, load).length > 0, closed });
   }
   return out;
 }
@@ -137,8 +189,8 @@ export async function listSlots(tx: Tx, biz: Business, service: ServiceRow, day:
   if (!isDay(day)) fail(400, 'Fecha inválida.');
   const barbers = await activeBarbers(tx, biz.id);
   const ids = opts.barberId ? barbers.filter((b) => b.id === opts.barberId).map((b) => b.id) : barbers.map((b) => b.id);
-  const busy = await busyBlocks(tx, biz.id, day, day);
-  return slotsFor(biz, now, day, service.duration_min, ids, busy, opts).map((s) => ({
+  const load = await agendaLoad(tx, biz.id, day, day);
+  return slotsFor(biz, now, day, service.duration_min, ids, load, opts).map((s) => ({
     time: fmtMin(s.start),
     start: s.start,
     free: s.barbers,
@@ -202,8 +254,9 @@ export async function createAppointment(
   const payment = (typeof input.payment === 'string' && input.payment in PAYMENTS ? input.payment : null) as Payment | null;
   if (source === 'web' && !payment) fail(400, 'Elegí cómo vas a pagar.');
 
-  const busy = await busyBlocks(tx, biz.id, day, day);
-  const slots = slotsFor(biz, now, day, service.duration_min, [barber.id], busy, { anyTime: source === 'barbero' });
+  await lockDay(tx, biz.id, day);
+  const load = await agendaLoad(tx, biz.id, day, day);
+  const slots = slotsFor(biz, now, day, service.duration_min, [barber.id], load, { anyTime: source === 'barbero' });
   if (!slots.some((s) => s.start === start)) fail(409, `${barber.name} ya no está libre a esa hora. Elegí otro horario.`);
 
   const client = who.client;
@@ -270,6 +323,16 @@ export async function cancelAppointment(tx: Tx, appt: ApptRow): Promise<void> {
   await tx`update appointments set status = 'cancelled', cancelled_at = now() where id = ${appt.id}`;
   await releaseReward(tx, appt);
   await freeBarberIfCutting(tx, appt);
+}
+
+/** "No vino": libera el horario y el beneficio reservado; queda anotado como ausente */
+export async function noShowAppointment(tx: Tx, appt: ApptRow, now: Now): Promise<void> {
+  if (appt.status !== 'booked') fail(409, 'Ese turno ya estaba cerrado.');
+  if (appt.day > now.day || (appt.day === now.day && appt.start_min > now.min)) {
+    fail(409, 'Todavía no llegó la hora del turno. Si avisó que no viene, cancelalo.');
+  }
+  await tx`update appointments set status = 'no_show', cancelled_at = now() where id = ${appt.id}`;
+  await releaseReward(tx, appt);
 }
 
 /** "Vino · marcar y sellar": registra el corte, suma sellos (doble si corresponde) y libera al barbero */
@@ -354,9 +417,10 @@ export async function liveStatus(tx: Tx, biz: Business, now: Now) {
     select count(*)::int as waiting from queue_entries where business_id = ${biz.id} and status = 'waiting'`;
   const services = await activeServices(tx, biz.id);
   const avg = services.length ? services.reduce((a, s) => a + s.duration_min, 0) / services.length : 30;
-  const open = isOpenAt(biz.hours, now.day, now.min);
-  const next = open ? null : nextOpening(biz.hours, now);
-  const closes = closesAt(biz.hours, now.day, now.min);
+  const cuts = await businessCuts(tx, biz.id, now.day);
+  const open = isOpenAt(biz.hours, now.day, now.min, cuts);
+  const next = open ? null : nextOpening(biz.hours, now, cuts);
+  const closes = closesAt(biz.hours, now.day, now.min, cuts);
   return {
     open,
     closesAt: closes !== null ? fmtMin(closes) : null,
@@ -420,7 +484,96 @@ export function apptDto(a: ApptRow, extra: { barberName?: string; projected?: nu
     stampsAdded: a.stamps_added,
     waSent: !!a.wa_sent_at,
     confirmed: !!a.confirmed_at,
+    reminded: !!a.reminded_at,
     estEndInMin: a.status === 'in_progress' ? minutesUntil(a.est_end_at) : null,
   };
 }
 export type ApptDto = ReturnType<typeof apptDto>;
+
+// ---------------------------------------------------------------------
+// Bloqueos de agenda (almuerzo, franco, vacaciones, feriados)
+// ---------------------------------------------------------------------
+export interface NewBlock {
+  barberId: string | null; // null = todo el local
+  days: string[];
+  start: number;
+  end: number;
+  reason: string | null;
+  by: string;
+}
+
+/** Crea los bloqueos; si hay turnos reservados en ese horario, no bloquea y avisa cuáles son */
+export async function createBlocks(tx: Tx, biz: Business, b: NewBlock, now: Now): Promise<number> {
+  if (!b.days.length) fail(400, 'Elegí el día.');
+  if (b.days.length > 62) fail(400, 'Como máximo 2 meses de una vez.');
+  if (!(b.start >= 0 && b.end <= 1440 && b.end > b.start)) fail(400, 'Revisá el horario: "hasta" tiene que ser después de "desde".');
+  for (const day of b.days) {
+    if (!isDay(day)) fail(400, 'Fecha inválida.');
+    if (day < now.day) fail(400, 'No se pueden bloquear días que ya pasaron.');
+  }
+  const days = [...new Set(b.days)].sort();
+  for (const day of days) await lockDay(tx, biz.id, day);
+  const clash = await tx<{ day: string; start_min: number; client_name: string; barber: string }[]>`
+    select a.day, a.start_min, a.client_name, s.name as barber
+    from appointments a join staff s on s.id = a.barber_id
+    where a.business_id = ${biz.id} and a.day = any(${days}::date[])
+      and a.status in ('booked', 'in_progress') and a.source <> 'fila'
+      and a.start_min < ${b.end} and a.end_min > ${b.start}
+      ${b.barberId ? tx`and a.barber_id = ${b.barberId}` : tx``}
+    order by a.day, a.start_min
+    limit 6`;
+  if (clash.length) {
+    const list = clash
+      .map((c) => `${days.length > 1 ? dayLabel(c.day) + ' ' : ''}${fmtMin(c.start_min)} ${c.client_name}${b.barberId ? '' : ` (${c.barber})`}`)
+      .join(', ');
+    fail(409, `Hay turnos reservados en ese horario: ${list}. Cancelalos o avisales antes de bloquear.`);
+  }
+  for (const day of days) {
+    await tx`insert into blocks (business_id, barber_id, day, start_min, end_min, reason, created_by)
+             values (${biz.id}, ${b.barberId}, ${day}, ${b.start}, ${b.end}, ${b.reason}, ${b.by})`;
+  }
+  return days.length;
+}
+
+export function blockDto(b: BlockRow, names: Record<string, string> = {}) {
+  const allDay = b.start_min === 0 && b.end_min === 1440;
+  return {
+    id: b.id,
+    day: b.day,
+    dayLabel: dayLabel(b.day),
+    barberId: b.barber_id,
+    barberName: b.barber_id ? (names[b.barber_id] ?? null) : null,
+    allDay,
+    from: fmtMin(b.start_min),
+    to: b.end_min === 1440 ? '24:00' : fmtMin(b.end_min),
+    start: b.start_min,
+    end: b.end_min,
+    reason: b.reason,
+  };
+}
+export type BlockDto = ReturnType<typeof blockDto>;
+
+/** Lee "día (o desde/hasta), todo el día o desde/hasta hora, motivo" de un formulario */
+export function parseBlockInput(body: Record<string, unknown>, opts: { multiDay: boolean }): { days: string[]; start: number; end: number; reason: string | null } {
+  const from = body.day ?? body.fromDay;
+  if (!isDay(from)) fail(400, 'Elegí el día.');
+  let days = [from];
+  if (opts.multiDay && body.toDay !== undefined && body.toDay !== '' && body.toDay !== null) {
+    const to = body.toDay;
+    if (!isDay(to)) fail(400, 'Revisá el día "hasta".');
+    if (to < from) fail(400, 'El día "hasta" tiene que ser después del "desde".');
+    days = [];
+    for (let d = from; d <= to && days.length <= 62; d = addDays(d, 1)) days.push(d);
+  }
+  let start = 0;
+  let end = 1440;
+  if (body.allDay !== true) {
+    const m1 = /^(\d{2}):(\d{2})$/.exec(String(body.from ?? ''));
+    const m2 = /^(\d{2}):(\d{2})$/.exec(String(body.to ?? ''));
+    if (!m1 || !m2) fail(400, 'Elegí desde qué hora y hasta qué hora.');
+    start = Number(m1[1]) * 60 + Number(m1[2]);
+    end = Number(m2[1]) * 60 + Number(m2[2]);
+  }
+  const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 60) || null : null;
+  return { days, start, end, reason };
+}

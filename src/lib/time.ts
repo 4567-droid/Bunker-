@@ -74,32 +74,53 @@ export function monthLabel(month: string): string {
   return `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
 }
 
-export function rangesFor(hours: Hours, day: string): [number, number][] {
+/** Tramos en que el local cierra fuera de lo normal (feriados, eventos): día → [[desde, hasta]] */
+export type Cuts = Record<string, [number, number][]>;
+
+/** Saca de los tramos abiertos los pedazos cerrados */
+export function subtractRanges(ranges: [number, number][], cut: [number, number][]): [number, number][] {
+  let out = ranges;
+  for (const [c0, c1] of cut) {
+    const next: [number, number][] = [];
+    for (const [a, b] of out) {
+      if (c1 <= a || c0 >= b) next.push([a, b]);
+      else {
+        if (c0 > a) next.push([a, c0]);
+        if (c1 < b) next.push([c1, b]);
+      }
+    }
+    out = next;
+  }
+  return out;
+}
+
+export function rangesFor(hours: Hours, day: string, cuts?: Cuts): [number, number][] {
   const list = hours[String(dow(day))] ?? [];
-  return list
+  const ranges = list
     .map(([a, b]) => [toMin(a), toMin(b)] as [number, number])
     .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)
     .sort((x, y) => x[0] - y[0]);
+  return cuts?.[day]?.length ? subtractRanges(ranges, cuts[day]) : ranges;
 }
 
-export function isOpenDay(hours: Hours, day: string): boolean {
-  return rangesFor(hours, day).length > 0;
+export function isOpenDay(hours: Hours, day: string, cuts?: Cuts): boolean {
+  return rangesFor(hours, day, cuts).length > 0;
 }
 
-export function isOpenAt(hours: Hours, day: string, min: number): boolean {
-  return rangesFor(hours, day).some(([a, b]) => min >= a && min < b);
+export function isOpenAt(hours: Hours, day: string, min: number, cuts?: Cuts): boolean {
+  return rangesFor(hours, day, cuts).some(([a, b]) => min >= a && min < b);
 }
 
 /** Hora de cierre del tramo actual (si está abierto) */
-export function closesAt(hours: Hours, day: string, min: number): number | null {
-  const r = rangesFor(hours, day).find(([a, b]) => min >= a && min < b);
+export function closesAt(hours: Hours, day: string, min: number, cuts?: Cuts): number | null {
+  const r = rangesFor(hours, day, cuts).find(([a, b]) => min >= a && min < b);
   return r ? r[1] : null;
 }
 
-export function nextOpening(hours: Hours, now: Now): { day: string; min: number } | null {
-  for (let i = 0; i < 8; i++) {
+export function nextOpening(hours: Hours, now: Now, cuts?: Cuts): { day: string; min: number } | null {
+  for (let i = 0; i < 15; i++) {
     const day = addDays(now.day, i);
-    for (const [a] of rangesFor(hours, day)) {
+    for (const [a] of rangesFor(hours, day, cuts)) {
       if (i > 0 || a > now.min) return { day, min: a };
     }
   }
@@ -136,4 +157,22 @@ export function monthDays(month: string): string[] {
   const [y, m] = month.split('-').map(Number);
   const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return Array.from({ length: n }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`);
+}
+
+/** Día + minuto en la zona del negocio → instante real (para el calendario del celular) */
+export function zonedToUtc(day: string, min: number, tz: string): Date {
+  const [y, m, d] = day.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, Math.floor(min / 60), min % 60);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(guess));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const asZoned = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'));
+  return new Date(guess - (asZoned - guess));
 }

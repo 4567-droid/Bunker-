@@ -8,15 +8,15 @@ export async function getPublicConfig(biz: Business) {
     const [services, barbers, products] = await Promise.all([
       activeServices(tx, biz.id),
       activeBarbers(tx, biz.id),
-      tx<ProductRow[]>`select id, name, description, price, active, sort from products
+      tx<(ProductRow & { image_url: string | null })[]>`select id, name, description, price, image_url, active, sort from products
                        where business_id = ${biz.id} and active order by sort, name`,
     ]);
     return {
       business: publicBusiness(biz),
       today: bizNow(biz).day,
       services: services.map((s) => ({ id: s.id, name: s.name, duration: s.duration_min, price: s.price })),
-      barbers: barbers.map((b) => ({ id: b.id, name: b.name, instagram: b.instagram })),
-      products: products.map((p) => ({ id: p.id, name: p.name, description: p.description, price: p.price })),
+      barbers: barbers.map((b) => ({ id: b.id, name: b.name, instagram: b.instagram, photoUrl: b.photo_url })),
+      products: products.map((p) => ({ id: p.id, name: p.name, description: p.description, price: p.price, imageUrl: p.image_url })),
       realtime: process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
         ? { url: process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY }
         : null,

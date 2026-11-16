@@ -21,6 +21,7 @@ export interface Business {
   city: string | null;
   maps_url: string | null;
   transfer_alias: string | null;
+  mp_link: string | null;
   timezone: string;
   hours: Hours;
   slot_step: number;
@@ -101,6 +102,7 @@ export function publicBusiness(b: Business) {
     city: b.city,
     mapsUrl: b.maps_url,
     transferAlias: b.transfer_alias,
+    mpLink: b.mp_link,
     timezone: b.timezone,
     hours: b.hours,
     slotStep: b.slot_step,

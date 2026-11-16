@@ -110,3 +110,11 @@ export function toErrorResponse(e: unknown): Response {
 export function notFound(): never {
   fail(404, 'No encontrado.');
 }
+
+/** Dirección pública de la web (para armar links en mensajes de WhatsApp) */
+export function publicOrigin(req: Request): string {
+  const h = req.headers;
+  const host = (h.get('x-forwarded-host') ?? h.get('host') ?? '').split(',')[0].trim();
+  const proto = (h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')).split(',')[0].trim();
+  return host ? `${proto}://${host}` : new URL(req.url).origin;
+}
