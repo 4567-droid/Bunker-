@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Jost } from 'next/font/google';
+import { headers } from 'next/headers';
 import type { CSSProperties, ReactNode } from 'react';
 import { currentBusiness } from '@/lib/business';
 import './globals.css';
@@ -17,12 +18,29 @@ async function safeBusiness() {
 export async function generateMetadata(): Promise<Metadata> {
   const biz = await safeBusiness();
   const name = biz?.name ?? 'Turnos';
+  const own = biz?.slug === 'bunker';
   const icon = biz?.logo_url ?? '/brand/favicon-32.png';
+  const h = await headers();
+  const host = (h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000').split(',')[0].trim();
+  const proto = (h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')).split(',')[0].trim();
+  const description = `Sacá tu turno en ${name}: elegí servicio, horario y barbero. Tarjeta de fidelidad y ${biz?.referral_percent ?? 20}% para vos y un amigo.`;
+  const image = own ? '/brand/og-bunker.png' : biz?.logo_url;
   return {
+    metadataBase: new URL(`${proto}://${host}`),
     title: { default: `${name} · Turnos online`, template: `%s · ${name}` },
-    description: `Sacá tu turno en ${name}: elegí servicio, horario y barbero. Tarjeta de fidelidad y 20% invitando a un amigo.`,
-    icons: { icon: biz?.slug === 'bunker' ? '/brand/favicon-32.png' : icon, apple: biz?.slug === 'bunker' ? '/brand/apple-icon.png' : icon },
-    openGraph: { title: name, description: 'Turnos online', images: biz?.logo_url ? [biz.logo_url] : [] },
+    description,
+    applicationName: name,
+    icons: { icon: own ? '/brand/favicon-32.png' : icon, apple: own ? '/brand/apple-icon.png' : icon },
+    appleWebApp: { capable: true, title: name.split(/\s+/)[0], statusBarStyle: 'black-translucent' },
+    openGraph: {
+      type: 'website',
+      locale: 'es_AR',
+      siteName: name,
+      title: `${name} · Sacá tu turno online`,
+      description,
+      images: image ? [{ url: image, width: own ? 1200 : undefined, height: own ? 630 : undefined, alt: name }] : [],
+    },
+    twitter: { card: own ? 'summary_large_image' : 'summary', title: name, description, images: image ? [image] : [] },
   };
 }
 
