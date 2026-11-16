@@ -172,5 +172,14 @@ Decisiones tomadas (respetarlas o cambiarlas a conciencia):
 - **Multi-negocio** por dominio (`businesses.domain`); sin dominio, `?negocio=slug` o `DEFAULT_BUSINESS_SLUG`.
 - Reglas puras (sellos, horarios libres, corrimiento, fila) en `src/lib/rules.ts`; lógica con base en `src/lib/booking.ts`.
 
+Sumado después (migración `002_bloqueos_fotos_pagos.sql`):
+
+- Bloqueos (`blocks`): el barbero bloquea su almuerzo/franco/vacaciones; el dueño cierra el local (feriados) o bloquea
+  a un barbero varios días. Los cierres del local se restan del horario (`rangesFor(..., cuts)`); los del barbero lo
+  ocupan. No se bloquea encima de turnos reservados. `lockDay()` serializa turnos y bloqueos del mismo día.
+- "No vino" (`no_show`), recordatorio por WhatsApp (`reminded_at`), turnos del día y clientes (con CSV) en la Central.
+- Fotos (`images`, servidas en `/api/img/<id>`), `mp_link` de Mercado Pago, `.ics` para el calendario,
+  editar/borrar cuenta del cliente (los cortes viejos quedan anónimos), `manifest.ts` y vista previa (`og-bunker.png`).
+
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

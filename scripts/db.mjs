@@ -255,7 +255,12 @@ async function seedDemo(tx, biz) {
     (${biz.id}, 'Mantenimiento', 'Afilado y service de máquinas', 30000, ${firstDay})`;
   await tx`insert into queue_entries (business_id, name) values
     (${biz.id}, 'Gonzalo R.'), (${biz.id}, 'Ramiro D.'), (${biz.id}, 'Elías F.')`;
-  console.log(`Demo: ${clients.length} clientes, ${n} cortes del mes, turnos de hoy y mañana, gastos y fila.`);
+  // Un trámite de Iván mañana y datos de pago de ejemplo
+  await tx`insert into blocks (business_id, barber_id, day, start_min, end_min, reason)
+           values (${biz.id}, ${barbers[1].id}, ${tomorrow}, ${18 * 60}, ${19 * 60}, 'Trámite')`;
+  await tx`update businesses set transfer_alias = 'bunker.barber.demo', mp_link = 'https://link.mercadopago.com.ar/demo'
+           where id = ${biz.id}`;
+  console.log(`Demo: ${clients.length} clientes, ${n} cortes del mes, turnos de hoy y mañana, gastos, fila y un bloqueo.`);
 }
 
 async function reset() {

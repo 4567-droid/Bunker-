@@ -32,7 +32,13 @@ function agent(extra = {}) {
     }
     return { status: res.status, data: await res.json().catch(() => ({})) };
   }
-  return { get: (p, h) => req(p, undefined, h), post: (p, b = {}, h) => req(p, b, h) };
+  // Para respuestas que no son JSON (calendario, planilla, fotos)
+  async function raw(path) {
+    const h = { ...extra };
+    if (jar.size) h.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+    return fetch(BASE + path, { headers: h });
+  }
+  return { get: (p, h) => req(p, undefined, h), post: (p, b = {}, h) => req(p, b, h), raw };
 }
 
 const pub = agent();
@@ -298,6 +304,197 @@ test('admin general y aislamiento entre negocios', async () => {
     return { n, s };
   });
   assert.deepEqual(seen, { n: 0, s: 0 });
+});
+
+// ---------------------------------------------------------------------
+// Etapa 2: bloqueos, "No vino", recordatorios, fotos, pagos, cuenta, central
+// ---------------------------------------------------------------------
+const SAT = '2026-11-14';
+const dani = agent();
+// PNG de 1×1 (válido)
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('bloqueos: horario del barbero, choque con turnos, feriado y vacaciones', async () => {
+  let r = await mauri.post('/api/barber/block', { day: SAT, allDay: false, from: '16:00', to: '17:00', reason: 'Trámite' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  let s = await pub.get(`/api/public/slots?service=${ctx.svc.Corte}&day=${SAT}`);
+  const at16 = s.data.slots.find((x) => x.time === '16:00');
+  assert.ok(at16 && !at16.free.includes(ctx.barber.Mauri) && at16.free.includes(ctx.barber['Iván']), 'a las 16 Mauri no está, Iván sí');
+
+  r = await dani.post('/api/client/register', { name: 'Dani Sosa', phone: '362 477-7777' });
+  assert.equal(r.status, 201);
+  r = await dani.post('/api/client/book', { serviceId: ctx.svc.Corte, day: SAT, time: '16:30', barberId: ctx.barber.Mauri, payment: 'efectivo' });
+  assert.equal(r.status, 409, 'Mauri bloqueado');
+  r = await dani.post('/api/client/book', { serviceId: ctx.svc.Corte, day: SAT, time: '10:00', barberId: ctx.barber['Iván'], payment: 'transferencia' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  ctx.daniAppt = r.data.appointment.id;
+
+  r = await ivan.post('/api/barber/block', { day: SAT, allDay: true, reason: 'Franco' });
+  assert.equal(r.status, 409, 'no bloquea encima de un turno');
+  assert.match(r.data.error, /10:00 Dani Sosa/);
+
+  const ag = await mauri.get(`/api/barber/agenda?day=${SAT}`);
+  assert.equal(ag.data.blocks.length, 1);
+  assert.equal(ag.data.blocks[0].mine, true);
+  ctx.mauriBlock = ag.data.blocks[0].id;
+  r = await ivan.post('/api/barber/block/delete', { id: ctx.mauriBlock });
+  assert.equal(r.status, 404, 'no borra bloqueos de otro');
+
+  // Feriado del local el lunes 16
+  r = await owner.post('/api/owner/blocks', { day: '2026-11-16', allDay: true, reason: 'Feriado' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  let d = await pub.get(`/api/public/days?service=${ctx.svc.Corte}`);
+  let mon = d.data.days.find((x) => x.day === '2026-11-16');
+  assert.deepEqual([mon.available, mon.closed], [false, 'Feriado']);
+  s = await pub.get(`/api/public/slots?service=${ctx.svc.Corte}&day=2026-11-16`);
+  assert.equal(s.data.slots.length, 0);
+
+  // Vacaciones de Leo, tres días
+  const st = await owner.get('/api/owner/settings');
+  const leo = st.data.barbers.find((b) => b.name === 'Leo');
+  r = await owner.post('/api/owner/blocks', { barberId: leo.id, day: '2026-11-17', toDay: '2026-11-19', allDay: true, reason: 'Vacaciones' });
+  assert.equal(r.data.days, 3);
+  let list = await owner.get('/api/owner/blocks');
+  assert.equal(list.data.blocks.length, 5);
+  assert.equal(list.data.blocks.filter((b) => b.barberName === 'Leo').length, 3);
+
+  const feriado = list.data.blocks.find((b) => b.reason === 'Feriado');
+  r = await owner.post('/api/owner/blocks/delete', { id: feriado.id });
+  assert.equal(r.status, 200);
+  d = await pub.get(`/api/public/days?service=${ctx.svc.Corte}`);
+  mon = d.data.days.find((x) => x.day === '2026-11-16');
+  assert.deepEqual([mon.available, mon.closed], [true, null]);
+});
+
+test('no vino y recordatorio por WhatsApp', async () => {
+  let r = await mauri.post('/api/barber/appointments', { name: 'Eze Gómez', phone: '362 466-6666', serviceId: ctx.svc['Barba sola'], day: DAY, time: '11:00' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const id = r.data.appointment.id;
+  r = await mauri.post('/api/barber/noshow', { id });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await mauri.post('/api/barber/noshow', { id });
+  assert.equal(r.status, 409);
+  const ag = await mauri.get('/api/barber/agenda');
+  assert.equal(ag.data.rows.find((x) => x.id === id).status, 'no_show');
+  assert.equal(ag.data.counters.noShow, 1);
+
+  r = await ivan.post('/api/barber/noshow', { id: ctx.daniAppt });
+  assert.equal(r.status, 409, 'un turno que todavía no llegó no se marca ausente');
+  assert.match(r.data.error, /Todavía no/);
+
+  r = await ivan.post('/api/barber/remind', { id: ctx.daniAppt });
+  assert.equal(r.status, 200);
+  const agSat = await ivan.get(`/api/barber/agenda?day=${SAT}`);
+  const row = agSat.data.rows.find((x) => x.id === ctx.daniAppt);
+  assert.equal(row.reminded, true);
+  assert.equal(row.client.visits, 0);
+});
+
+test('fotos subidas, link de Mercado Pago y app instalable', async () => {
+  let r = await owner.post('/api/owner/image', { target: 'barber', id: ctx.barber.Mauri, data: PNG });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const url = r.data.url;
+  assert.match(url, /^\/api\/img\/[0-9a-f-]{36}$/);
+  let img = await pub.raw(url);
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get('content-type'), 'image/png');
+  assert.match(img.headers.get('cache-control'), /immutable/);
+  let cfg = await pub.get('/api/public/config');
+  assert.equal(cfg.data.barbers.find((b) => b.name === 'Mauri').photoUrl, url);
+
+  const fake = 'data:image/png;base64,' + Buffer.from('<html><script>alert(1)</script></html>'.repeat(5)).toString('base64');
+  r = await owner.post('/api/owner/image', { target: 'hero', data: fake });
+  assert.equal(r.status, 400, 'solo fotos de verdad');
+  r = await mauri.post('/api/owner/image', { target: 'barber', id: ctx.barber.Mauri, data: PNG });
+  assert.equal(r.status, 401, 'un barbero no sube fotos');
+
+  r = await owner.post('/api/owner/image/delete', { target: 'barber', id: ctx.barber.Mauri });
+  assert.equal(r.status, 200);
+  img = await pub.raw(url);
+  assert.equal(img.status, 404, 'la foto vieja se borra');
+
+  const st = await owner.get('/api/owner/settings');
+  r = await owner.post('/api/owner/business', { ...st.data.business, mpLink: 'link.mercadopago.com.ar/bunker', transferAlias: 'bunker.barber' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  cfg = await pub.get('/api/public/config');
+  assert.equal(cfg.data.business.mpLink, 'https://link.mercadopago.com.ar/bunker');
+  r = await owner.post('/api/owner/business', { ...st.data.business, mpLink: 'javascript:alert(1)' });
+  assert.equal(r.status, 400);
+
+  const m = await (await pub.raw('/manifest.webmanifest')).json();
+  assert.equal(m.name, 'Bunker Barber Club');
+  assert.equal(m.display, 'standalone');
+  const home = await (await pub.raw('/')).text();
+  assert.match(home, /og-bunker\.png/);
+});
+
+test('cuenta del cliente: calendario, historial, editar y borrar', async () => {
+  let res = await dani.raw(`/api/client/ics?id=${ctx.daniAppt}`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /text\/calendar/);
+  const ics = await res.text();
+  assert.match(ics, /DTSTART:20261114T130000Z/, '10:00 en Resistencia = 13:00 UTC');
+  assert.match(ics, /SUMMARY:Corte en Bunker Barber Club/);
+  res = await bruno.raw(`/api/client/ics?id=${ctx.daniAppt}`);
+  assert.equal(res.status, 404, 'no ve turnos ajenos');
+
+  const bme = await bruno.get('/api/client/me');
+  assert.ok(bme.data.history.length >= 3);
+  assert.ok(bme.data.history.some((h) => h.free));
+
+  let r = await dani.post('/api/client/update', { name: 'Daniela Sosa', email: 'dani@mail.com' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.client.name, 'Daniela Sosa');
+  const ag = await ivan.get(`/api/barber/agenda?day=${SAT}`);
+  assert.equal(ag.data.rows.find((x) => x.id === ctx.daniAppt).clientName, 'Daniela Sosa');
+
+  r = await dani.post('/api/client/delete', {});
+  assert.equal(r.status, 400, 'pide confirmación');
+  r = await dani.post('/api/client/delete', { confirm: true });
+  assert.equal(r.status, 200);
+  r = await dani.get('/api/client/me');
+  assert.equal(r.data.client, null);
+  const [a] = await sql`select status, client_name, client_phone from appointments where id = ${ctx.daniAppt}`;
+  assert.deepEqual(a, { status: 'cancelled', client_name: 'Cliente eliminado', client_phone: null });
+  const s = await pub.get(`/api/public/slots?service=${ctx.svc.Corte}&day=${SAT}`);
+  assert.ok(s.data.slots.find((x) => x.time === '10:00').free.includes(ctx.barber['Iván']), 'el horario quedó libre');
+});
+
+test('central: turnos del día y planilla de clientes', async () => {
+  const a = await owner.get('/api/owner/agenda');
+  assert.equal(a.status, 200);
+  assert.deepEqual(a.data.barbers.map((b) => b.name), ['Mauri', 'Iván', 'Leo']);
+  assert.equal(a.data.totals.noShow, 1);
+  let c = await owner.get('/api/owner/clients?q=bruno');
+  assert.deepEqual(c.data.clients.map((x) => x.name), ['Bruno Díaz']);
+  c = await owner.get('/api/owner/clients?q=466');
+  assert.equal(c.data.clients[0].name, 'Eze Gómez');
+  assert.equal(c.data.clients[0].noShows, 1);
+  c = await owner.get('/api/owner/clients?q=Daniela');
+  assert.equal(c.data.clients.length, 0, 'la cuenta borrada no aparece');
+  const csv = await owner.raw('/api/owner/clients?format=csv');
+  assert.match(csv.headers.get('content-type'), /text\/csv/);
+  const bytes = Buffer.from(await csv.arrayBuffer());
+  assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'marca para que Excel lea bien los acentos');
+  const text = bytes.subarray(3).toString('utf8');
+  assert.ok(text.startsWith('Nombre;Teléfono;Correo'));
+  assert.match(text, /Bruno Díaz/);
+  const r = await mauri.get('/api/owner/clients');
+  assert.equal(r.status, 401, 'un barbero no ve la planilla');
+});
+
+test('local cerrado de golpe: la web lo muestra y la fila no abre', async () => {
+  let r = await owner.post('/api/owner/blocks', { day: DAY, allDay: false, from: '10:30', to: '11:15', reason: 'Corte de luz' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  let live = await pub.get('/api/public/live');
+  assert.equal(live.data.open, false);
+  assert.deepEqual(live.data.nextOpening && [live.data.nextOpening.label, live.data.nextOpening.time], ['hoy', '11:15']);
+  r = await bruno.post('/api/client/queue', { action: 'join' });
+  assert.equal(r.status, 409);
+  const list = await owner.get('/api/owner/blocks');
+  await owner.post('/api/owner/blocks/delete', { id: list.data.blocks.find((b) => b.reason === 'Corte de luz').id });
+  live = await pub.get('/api/public/live');
+  assert.equal(live.data.open, true);
 });
 
 test('seguridad: CSRF y freno a intentos', async () => {
