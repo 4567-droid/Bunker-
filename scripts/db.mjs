@@ -7,9 +7,10 @@
 //
 // Usa DATABASE_URL (o DIRECT_URL si existe) del archivo .env.local / .env
 //
-// En Vercel, `npm run vercel-build` corre migrate + seed antes de compilar: las tablas se crean
-// y Bunker se carga solo en la primera publicación (después no toca nada). Ahí las claves iniciales
-// salen de las variables de Vercel (ADMIN_PASSWORD, OWNER_PASSWORD, MAURI_CODE, IVAN_CODE).
+// En Vercel, `npm run vercel-build` corre `prepare` (= migrate + seed) antes de compilar: las tablas
+// se crean y Bunker se carga solo en la primera publicación (después no toca nada). Ahí las claves
+// iniciales salen de las variables de Vercel (ADMIN_PASSWORD, OWNER_PASSWORD, MAURI_CODE, IVAN_CODE).
+// Si todavía no hay base conectada, `prepare` avisa y deja compilar igual: la web muestra el aviso.
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -33,8 +34,15 @@ function loadEnv() {
 loadEnv();
 
 const onVercel = !!process.env.VERCEL;
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const cmd = process.argv[2];
+// DIRECT_URL (opcional, para crear tablas), DATABASE_URL, o POSTGRES_URL (la integración de Vercel)
+const url = process.env.DIRECT_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
 if (!url) {
+  if (cmd === 'prepare') {
+    console.warn('⚠ Todavía no hay una base de datos conectada: se compila igual, pero la web va a avisar que falta.');
+    console.warn('  En Vercel: Storage → Create Database → Supabase (o cargá DATABASE_URL) y después Redeploy.');
+    process.exit(0);
+  }
   console.error(
     onVercel
       ? 'Falta DATABASE_URL: cargala en Vercel → Settings → Environment Variables y volvé a publicar.'
@@ -75,6 +83,9 @@ function secret(name, min, fallback) {
 
 async function migrate() {
   await sql`create table if not exists _migrations (name text primary key, applied_at timestamptz not null default now())`;
+  // Supabase: la API pública no tiene por qué ver esta tabla
+  const [{ anon }] = await sql`select exists (select 1 from pg_roles where rolname = 'anon') as anon`;
+  if (anon) await sql`revoke all on _migrations from anon, authenticated`;
   const dir = join(root, 'db', 'migrations');
   const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
   const done = new Set((await sql`select name from _migrations`).map((r) => r.name));
@@ -276,12 +287,15 @@ async function reset() {
   await migrate();
 }
 
-const cmd = process.argv[2];
 try {
   if (cmd === 'migrate') await migrate();
+  else if (cmd === 'prepare') {
+    await migrate();
+    await seed({ demo: false });
+  }
   else if (cmd === 'seed') await seed({ demo: process.argv.includes('--demo') });
   else if (cmd === 'reset') await reset();
-  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | reset --yes');
+  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | reset --yes | prepare');
 } catch (e) {
   console.error('Error:', e.message);
   process.exitCode = 1;

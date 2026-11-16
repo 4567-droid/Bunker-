@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "node scripts/db.mjs migrate && node scripts/db.mjs seed && next build",
+    "vercel-build": "node scripts/db.mjs prepare && next build",
     "start": "next start",
     "lint": "tsc --noEmit",
     "db:migrate": "node scripts/db.mjs migrate",

@@ -82,7 +82,7 @@ export const currentBusiness = cache(async (): Promise<Business> => {
     if (b) return b;
   }
   const rows = await systemTx((tx) => tx<Business[]>`select * from businesses order by created_at limit 1`);
-  if (!rows[0]) fail(503, 'Todavía no hay ningún negocio cargado. Corré `npm run db:seed`.');
+  if (!rows[0]) fail(503, 'Todavía no hay ningún negocio cargado. En tu PC: `npm run db:seed`. En Vercel: Redeploy.');
   return rows[0];
 });
 
