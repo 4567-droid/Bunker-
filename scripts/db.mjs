@@ -6,6 +6,10 @@
 //   npm run db:reset -- --yes     BORRA TODO y vuelve a crear (solo para pruebas)
 //
 // Usa DATABASE_URL (o DIRECT_URL si existe) del archivo .env.local / .env
+//
+// En Vercel, `npm run vercel-build` corre migrate + seed antes de compilar: las tablas se crean
+// y Bunker se carga solo en la primera publicación (después no toca nada). Ahí las claves iniciales
+// salen de las variables de Vercel (ADMIN_PASSWORD, OWNER_PASSWORD, MAURI_CODE, IVAN_CODE).
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -28,9 +32,14 @@ function loadEnv() {
 }
 loadEnv();
 
+const onVercel = !!process.env.VERCEL;
 const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
 if (!url) {
-  console.error('Falta DATABASE_URL. Copiá .env.example a .env.local y completala.');
+  console.error(
+    onVercel
+      ? 'Falta DATABASE_URL: cargala en Vercel → Settings → Environment Variables y volvé a publicar.'
+      : 'Falta DATABASE_URL. Copiá .env.example a .env.local y completala.',
+  );
   process.exit(1);
 }
 const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
@@ -49,6 +58,20 @@ function hashPassword(password) {
 const normUser = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 const randomCode = () => String(randomInt(0, 10000)).padStart(4, '0');
 const randomPassword = () => randomBytes(9).toString('base64url');
+
+// Clave inicial: la de la variable de entorno o una al azar (que se muestra una vez).
+// En Vercel no se inventa ninguna: el registro de la publicación no es lugar para claves.
+function secret(name, min, fallback) {
+  const v = (process.env[name] || '').trim();
+  if (v) {
+    if (v.length < min) throw new Error(`${name} tiene que tener al menos ${min} caracteres.`);
+    return v;
+  }
+  if (onVercel) {
+    throw new Error(`Falta ${name}: cargala en Vercel → Settings → Environment Variables y volvé a publicar.`);
+  }
+  return fallback();
+}
 
 async function migrate() {
   await sql`create table if not exists _migrations (name text primary key, applied_at timestamptz not null default now())`;
@@ -84,7 +107,7 @@ async function seed({ demo }) {
     const adminUser = normUser(process.env.ADMIN_USER || 'admin');
     const [admin] = await tx`select id from staff where role = 'admin' and lower(username) = ${adminUser}`;
     if (!admin) {
-      const pass = process.env.ADMIN_PASSWORD || randomPassword();
+      const pass = secret('ADMIN_PASSWORD', 8, randomPassword);
       await tx`insert into staff (role, name, username, password_hash)
                values ('admin', 'Administrador general', ${adminUser}, ${hashPassword(pass)})`;
       printed.push(['Administrador general (/admin)', adminUser, pass]);
@@ -106,14 +129,14 @@ async function seed({ demo }) {
       returning *`;
 
     const ownerUser = normUser(process.env.OWNER_USER || 'bunker');
-    const ownerPass = process.env.OWNER_PASSWORD || randomPassword();
+    const ownerPass = secret('OWNER_PASSWORD', 8, randomPassword);
     await tx`insert into staff (business_id, role, name, username, password_hash)
              values (${biz.id}, 'owner', 'Dueño Bunker', ${ownerUser}, ${hashPassword(ownerPass)})`;
     printed.push(['Central del dueño (/central)', ownerUser, ownerPass]);
 
     const barbers = [
-      { name: 'Mauri', instagram: 'maurii.montiel', code: process.env.MAURI_CODE || randomCode() },
-      { name: 'Iván', instagram: '_garcia_ivann', code: process.env.IVAN_CODE || randomCode() },
+      { name: 'Mauri', instagram: 'maurii.montiel', code: secret('MAURI_CODE', 4, randomCode) },
+      { name: 'Iván', instagram: '_garcia_ivann', code: secret('IVAN_CODE', 4, randomCode) },
     ];
     for (const [i, b] of barbers.entries()) {
       const [row] = await tx`
@@ -145,7 +168,11 @@ async function seed({ demo }) {
     if (demo) await seedDemo(tx, biz);
   });
 
-  if (printed.length) {
+  if (printed.length && onVercel) {
+    console.log('\nUsuarios creados (con las claves que cargaste en Vercel):');
+    for (const [where, user] of printed) console.log(`  · ${where}: usuario "${user}"`);
+    console.log('');
+  } else if (printed.length) {
     console.log('\nUsuarios creados (guardalos, las contraseñas no se vuelven a mostrar):');
     for (const [where, user, pass] of printed) console.log(`  · ${where}: usuario "${user}" · clave "${pass}"`);
     console.log('');

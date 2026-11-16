@@ -49,28 +49,45 @@ Sin `--demo` se carga solo lo real: negocio, dueño, barberos, servicios y produ
 
 ### 1. Base de datos en Supabase
 
-1. Entrá a supabase.com → **New project**. Región: **South America (São Paulo)**. Anotá la contraseña de la base.
-2. Cuando termine: botón **Connect** (arriba) → pestaña de conexión:
-   - **Transaction pooler** (puerto **6543**) → esa es tu `DATABASE_URL`.
-   - **Session pooler** (puerto **5432**) → esa es tu `DIRECT_URL` (solo para crear las tablas).
-   - Reemplazá `[YOUR-PASSWORD]` por la contraseña de la base.
-3. En tu PC, poné las dos en `.env.local` y corré:
-   ```bash
-   npm run db:migrate
-   npm run db:seed
-   ```
-   Guardá los usuarios y claves que aparecen.
-4. (Opcional, tiempo real) Supabase → **Project Settings → API**: copiá la *Project URL* y la clave *anon public*.
-   Con esto la luz verde/roja cambia al instante; sin esto se actualiza sola cada 15 segundos.
+1. Entrá a supabase.com → **New project**. Región: **South America (São Paulo)**.
+   Para la contraseña de la base usá solo letras y números (los símbolos rompen la dirección de conexión). Guardala.
+2. Cuando termine: botón **Connect** (arriba) → copiá dos direcciones y en cada una cambiá
+   `[YOUR-PASSWORD]` por la contraseña de la base:
+   - **Transaction pooler** (puerto **6543**) → va a ser `DATABASE_URL`.
+   - **Session pooler** (puerto **5432**) → va a ser `DIRECT_URL`.
+
+No hace falta correr nada en tu PC: las tablas se crean solas la primera vez que Vercel publica.
 
 ### 2. La web en Vercel
 
-1. vercel.com → **Add New → Project** → elegí este repositorio de GitHub.
-2. En **Environment Variables** cargá:
-   - `DATABASE_URL` = la del Transaction pooler (6543)
-   - `DEFAULT_BUSINESS_SLUG` = `bunker`
-   - `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (si hiciste el paso 4)
-3. **Deploy**. En un par de minutos te da una dirección tipo `bunker-xxx.vercel.app`. Probala desde el celular.
+1. vercel.com → **Add New → Project** → elegí este repositorio de GitHub (se publica la rama `main`).
+2. Antes de tocar **Deploy**, abrí **Environment Variables** y cargá:
+
+   | Nombre | Valor |
+   | --- | --- |
+   | `DATABASE_URL` | la del Transaction pooler (6543) |
+   | `DIRECT_URL` | la del Session pooler (5432) |
+   | `DEFAULT_BUSINESS_SLUG` | `bunker` |
+   | `ADMIN_PASSWORD` | la clave que quieras para `/admin` (8 o más caracteres) |
+   | `OWNER_PASSWORD` | la clave del dueño para `/central` (8 o más caracteres) |
+   | `MAURI_CODE` | el código de Mauri para `/barbero` (4 o más números) |
+   | `IVAN_CODE` | el código de Iván para `/barbero` (4 o más números) |
+
+3. **Deploy**. Vercel crea las tablas, carga Bunker (negocio, dueño, barberos, servicios y productos) y
+   publica. En un par de minutos te da una dirección tipo `bunker-xxx.vercel.app`. Probala desde el celular.
+   Usuarios: `admin` (admin), `bunker` (dueño), `Mauri` e `Iván` (barberos), con las claves que cargaste.
+4. Si falta alguna variable, la publicación se frena y el registro dice cuál ("Falta OWNER_PASSWORD...").
+   Cargala y tocá **Redeploy**.
+
+Las publicaciones siguientes no tocan los datos: solo aplican cambios nuevos de tablas, si los hay.
+Las cuatro claves iniciales se usan una sola vez; después de la primera publicación las podés borrar de Vercel
+(el dueño cambia la suya desde **/central → Ajustes**).
+
+`vercel.json` pone el servidor en San Pablo (`gru1`), al lado de la base, para que la web responda rápido.
+
+**Tiempo real (opcional).** Supabase → **Project Settings → API**: copiá la *Project URL* y la clave
+*anon public* y cargalas en Vercel como `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+(después, **Redeploy**). Con esto la luz verde/roja cambia al instante; sin esto se actualiza sola cada 15 segundos.
 
 > Ojo: el plan gratis de Vercel (Hobby) es para uso personal y no comercial. Para la web de un negocio
 > Vercel pide el plan Pro. Revisá sus condiciones antes de lanzar. El proyecto también corre en cualquier
