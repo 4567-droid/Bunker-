@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* Paleta de CLAUDE.md (diseño minimalista). El amarillo sale de cada negocio (--accent). */
+@theme {
+  --color-bg: #0E0E0D;
+  --color-hero: #121211;
+  --color-card: #1A1A18;
+  --color-line: #2A2A27;
+  --color-line-2: #2E2E2A;
+  --color-field: #232320;
+  --color-ink: #EDEAE2;
+  --color-soft: #D6D2C8;
+  --color-muted: #A9A59B;
+  --color-dim: #8C887F;
+  --color-faint: #6E6B63;
+  --color-off: #4A4842;
+  --color-dash: #3A3934;
+  --color-accent: var(--accent);
+  --color-pick: color-mix(in srgb, var(--accent) 9%, #121211);
+  --color-ok: #4CC26A;
+  --color-bad: #E0533D;
+  --color-wa: #25D366;
+  --color-wa-ink: #0B2414;
+  --font-sans: var(--font-jost), "Futura", "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  --accent: #F5C400;
+  color-scheme: dark;
+}
+
+@layer base {
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    animation: fade-in 0.25s ease-out;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

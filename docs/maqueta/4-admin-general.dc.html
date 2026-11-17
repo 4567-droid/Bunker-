@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Bunker Barber Club — Administrador general</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F100E}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+:focus-visible{outline:2px solid #F5C400;outline-offset:3px}
+</style>
+</helmet>
+<div style="background:#0F100E;color:#ECE8DD;font-family:'Barlow','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:1.5;min-height:880px">
+<div style="display:flex;flex-wrap:wrap;min-height:880px">
+
+<aside style="flex:1 1 240px;display:flex;flex-direction:column;justify-content:space-between;gap:32px;padding:28px 24px;box-sizing:border-box;background:#141512;border-right:1px solid #2C2D28">
+<div style="display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;align-items:center;gap:12px">
+<svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true"><rect x="2" y="6" width="32" height="24" fill="none" stroke="{{accent}}" stroke-width="2"></rect><rect x="8" y="15" width="20" height="4" fill="{{accent}}"></rect></svg>
+<span style="display:flex;flex-direction:column;line-height:1">
+<span style="font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:900;font-size:26px;letter-spacing:.04em;text-transform:uppercase">[Tu marca]</span>
+<span style="font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:#A5A196;margin-top:3px">Administrador</span>
+</span>
+</div>
+<nav style="display:flex;flex-direction:column;gap:6px">
+<a href="#negocios" style="display:flex;align-items:center;min-height:46px;padding:0 14px;background:#1F201C;border-left:3px solid {{accent}};font-weight:600">Negocios</a>
+<a href="#duenos" style="display:flex;align-items:center;min-height:46px;padding:0 14px;border-left:3px solid transparent;color:#A5A196">Supervisores</a>
+<a href="#dominios" style="display:flex;align-items:center;min-height:46px;padding:0 14px;border-left:3px solid transparent;color:#A5A196">Dominios</a>
+<a href="#contratos" style="display:flex;align-items:center;min-height:46px;padding:0 14px;border-left:3px solid transparent;color:#A5A196">Contratos</a>
+<a href="#ajustes" style="display:flex;align-items:center;min-height:46px;padding:0 14px;border-left:3px solid transparent;color:#A5A196">Ajustes</a>
+</nav>
+</div>
+<div style="display:flex;align-items:center;gap:12px;padding-top:20px;border-top:1px solid #2C2D28">
+<span style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:#ECE8DD;color:#0F100E;font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:900;font-size:24px">A</span>
+<span style="display:flex;flex-direction:column;line-height:1.2"><span style="font-weight:600">Administrador general</span><span style="font-size:14px;color:#A5A196">Acceso total</span></span>
+</div>
+</aside>
+
+<main id="negocios" style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:32px;padding:36px 40px 48px;box-sizing:border-box">
+
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#A5A196">Un solo panel, varios negocios</span>
+<h1 style="margin:0;font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:900;font-size:clamp(44px,6vw,72px);line-height:.95;text-transform:uppercase">Todos los negocios</h1>
+</div>
+<button type="button" style="min-height:52px;padding:0 24px;border:0;background:{{accent}};color:#0F100E;font-size:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">Agregar negocio</button>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px">
+<div style="display:flex;flex-direction:column;gap:2px;padding:16px 20px;background:#171815;border:1px solid #2C2D28"><span style="font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:800;font-size:40px;line-height:1">{{totalBusinesses}}</span><span style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#A5A196">Negocios</span></div>
+<div style="display:flex;flex-direction:column;gap:2px;padding:16px 20px;background:#171815;border:1px solid #2C2D28"><span style="font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:800;font-size:40px;line-height:1">{{totalOwners}}</span><span style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#A5A196">Supervisores</span></div>
+<div style="display:flex;flex-direction:column;gap:2px;padding:16px 20px;background:#171815;border:1px solid #2C2D28"><span style="font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:800;font-size:40px;line-height:1">{{totalStaff}}</span><span style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#A5A196">Barberos y profesionales</span></div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:32px;align-items:start">
+
+<section style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#A5A196;padding-bottom:6px">Negocios cargados</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{r.pick}}" aria-pressed="{{r.pressed}}" style="display:flex;flex-direction:column;gap:10px;width:100%;min-height:96px;padding:18px 20px;box-sizing:border-box;text-align:left;border:1px solid {{r.bd}};background:{{r.bg}};color:#ECE8DD">
+<span style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+<span style="font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:800;font-size:30px;line-height:1;text-transform:uppercase">{{r.name}}</span>
+<span style="font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:{{r.stateColor}}">{{r.state}}</span>
+</span>
+<span style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;font-size:15px;color:#A5A196"><span>{{r.kind}}</span><span>{{r.domain}}</span></span>
+</button>
+</sc-for>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:22px;padding:28px;background:#171815;border:1px solid #2C2D28">
+<div style="display:flex;flex-direction:column;gap:4px">
+<span style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#A5A196">Quién maneja qué</span>
+<span style="font-family:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;font-weight:800;font-size:38px;line-height:1;text-transform:uppercase">{{dName}}</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{tree}}" as="n" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:10px;margin-left:{{n.indent}}px">
+<span style="flex:0 0 {{n.lineW}}px;height:1px;background:#3A3B35"></span>
+<div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 12px;padding:12px 16px;background:{{n.bg}};border:1px solid {{n.bd}}">
+<span style="font-weight:600">{{n.label}}</span>
+<span style="font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#A5A196">{{n.role}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{noStaff}}" hint-placeholder-val="{{false}}">
+<span style="font-size:15px;color:#A5A196">Todavía no se cargaron barberos o profesionales en este negocio.</span>
+</sc-if>
+<div style="display:flex;flex-wrap:wrap;gap:12px">
+<a href="Dueno.dc.html" style="display:inline-flex;align-items:center;min-height:48px;padding:0 22px;background:{{accent}};color:#0F100E;font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">Abrir central del dueño</a>
+<button type="button" style="min-height:48px;padding:0 22px;border:1px solid #3A3B35;background:transparent;color:#ECE8DD;font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">Agregar usuario</button>
+</div>
+</section>
+
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F5C400","section":"Marca","options":["#F5C400","#C8553D","#8FB573","#D8D2C4"]},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 0 };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#F5C400';
+    const s = this.state;
+
+    const businesses = [
+      { name: 'Bunker Barber Club', kind: 'Barbería', domain: '[bunkerbarberclub.com.ar]', state: 'Demo', owner: '[SUPERVISOR]', staff: ['Mauri', 'Iván'], staffRole: 'Barbero' },
+      { name: '[Negocio de uñas]', kind: 'Uñas y estética', domain: '[DOMINIO]', state: 'Por armar', owner: '[SUPERVISORA]', staff: [], staffRole: 'Profesional' },
+      { name: '[Consultorio]', kind: 'Consultorio', domain: '[DOMINIO]', state: 'Por armar', owner: '[SUPERVISOR]', staff: [], staffRole: 'Profesional' }
+    ];
+
+    const rows = businesses.map((b, i) => {
+      const on = i === s.sel;
+      return {
+        name: b.name,
+        kind: b.kind,
+        domain: b.domain,
+        state: b.state,
+        stateColor: b.state === 'Demo' ? accent : '#A5A196',
+        pressed: on,
+        bg: on ? '#1F201C' : '#171815',
+        bd: on ? accent : '#2C2D28',
+        pick: () => this.setState({ sel: i })
+      };
+    });
+
+    const cur = businesses[s.sel];
+    const tree = [
+      { label: 'Administrador general', role: 'Nivel 1', indent: 0, lineW: 0, bg: '#1F201C', bd: accent },
+      { label: cur.owner, role: 'Supervisor · Nivel 2', indent: 24, lineW: 18, bg: '#171815', bd: '#3A3B35' }
+    ].concat(
+      cur.staff.map((n) => ({ label: n, role: cur.staffRole + ' · Nivel 3', indent: 56, lineW: 18, bg: '#171815', bd: '#2C2D28' }))
+    );
+
+    const totalStaff = businesses.reduce((sum, b) => sum + b.staff.length, 0);
+
+    return {
+      accent: accent,
+      rows: rows,
+      tree: tree,
+      dName: cur.name,
+      noStaff: cur.staff.length === 0,
+      totalBusinesses: businesses.length,
+      totalOwners: businesses.length,
+      totalStaff: totalStaff
+    };
+  }
+}
+</script>
+</body>
+</html>

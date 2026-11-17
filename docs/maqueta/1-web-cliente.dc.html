@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Bunker Barber Club</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E0E0D}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+input{font-family:inherit}
+:focus-visible{outline:2px solid #F5C400;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;background:#0E0E0D;color:#EDEAE2;font-family:'Jost','Futura','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.45">
+
+<div style="flex:1;width:100%;max-width:480px;margin:0 auto;box-sizing:border-box">
+
+<!-- ============ INICIO ============ -->
+<sc-if value="{{tabInicio}}" hint-placeholder-val="{{true}}">
+<div style="display:flex;flex-direction:column">
+
+<section style="position:relative;overflow:hidden;padding:24px 24px 120px;background:#121211">
+<svg width="300" height="420" viewBox="0 0 300 420" aria-hidden="true" style="position:absolute;right:-70px;top:40px;opacity:.55">
+<g fill="none" stroke="#2E2E2A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<path d="M150 0 v70"></path><path d="M110 70 h80 l18 30 h-116 z"></path>
+<rect x="150" y="170" width="110" height="130" rx="22"></rect>
+<rect x="110" y="290" width="170" height="44" rx="14"></rect>
+<path d="M120 245 h40 M270 245 h20"></path>
+<path d="M195 334 v50 M150 400 h90"></path>
+</g>
+<ellipse cx="150" cy="104" rx="46" ry="8" fill="#F5C400" opacity=".18"></ellipse>
+</svg>
+<div style="position:relative;display:flex;align-items:center;justify-content:space-between">
+<span style="display:flex;align-items:center;gap:12px">
+<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><g fill="none" stroke="#EDEAE2" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="26" r="5"></circle><circle cx="25" cy="26" r="5"></circle><path d="M12 22 L27 4"></path><path d="M22 22 L7 4"></path></g></svg>
+<span style="font-size:14px;font-weight:500;letter-spacing:.32em">BUNKER</span>
+</span>
+<a href="https://wa.me/5493625493647?text=Hola%20Bunker%2C%20quiero%20hacer%20una%20consulta" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid #2E2E2A"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EDEAE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 20.5l1.3-4A8.5 8.5 0 1 1 8 19.6z"></path></svg></a>
+</div>
+<div style="position:relative;margin-top:84px;display:flex;flex-direction:column;gap:6px">
+<h1 style="margin:0;display:flex;flex-direction:column;line-height:1.05">
+<span style="font-size:clamp(38px,11vw,48px);font-weight:700;letter-spacing:.02em">TU ESTILO,</span>
+<span style="font-size:clamp(34px,10vw,44px);font-weight:300;letter-spacing:.16em;color:#A9A59B">NUESTRA</span>
+<span style="font-size:clamp(34px,10vw,44px);font-weight:300;letter-spacing:.16em;color:#A9A59B">PASIÓN.</span>
+</h1>
+<span style="width:48px;height:3px;margin:18px 0 12px;background:{{accent}}"></span>
+<span style="font-size:17px;font-weight:300;color:#D6D2C8">Cortes de calidad,<br>con atención personalizada.</span>
+</div>
+</section>
+
+<section style="position:relative;margin:-84px 16px 0;padding:22px;border-radius:24px;background:#1A1A18;border:1px solid #2A2A27;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:6px">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+<span style="display:flex;flex-direction:column"><span style="font-size:22px;font-weight:600">Reservá tu turno</span><span style="font-size:14px;font-weight:300;color:#A9A59B">Elegí corte, horario y barbero.</span></span>
+</div>
+<sc-for list="{{quickRows}}" as="q" hint-placeholder-count="3">
+<button type="button" onClick="{{q.go}}" style="display:flex;align-items:center;gap:14px;min-height:56px;padding:0 16px;border:0;border-radius:14px;background:#232320;color:#D6D2C8;font-size:16px;text-align:left">
+<span style="flex:1">{{q.label}}</span>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A9A59B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</button>
+</sc-for>
+<button type="button" onClick="{{goTurno}}" style="margin-top:6px;min-height:56px;border:0;border-radius:999px;background:{{accent}};color:#0E0E0D;font-size:17px;font-weight:600">Sacar turno →</button>
+</section>
+
+<section style="margin:16px 16px 0;padding:18px 20px;border-radius:20px;background:#1A1A18;border:1px solid #2A2A27;display:flex;flex-direction:column;gap:12px">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">AHORA EN EL LOCAL</span>
+<sc-for list="{{team}}" as="b" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:17px;font-weight:500">{{b.name}}</span><span style="display:inline-flex;align-items:center;gap:8px;font-size:14px;color:#D6D2C8"><span style="width:9px;height:9px;border-radius:50%;background:{{b.dot}};box-shadow:0 0 8px {{b.dot}}"></span>{{b.status}}</span></div>
+</sc-for>
+</section>
+
+<button type="button" onClick="{{goFid}}" style="margin:16px 16px 0;padding:18px 20px;border-radius:20px;border:1px solid {{accent}};background:transparent;color:#EDEAE2;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left">
+<span style="display:flex;flex-direction:column"><span style="font-size:17px;font-weight:600">Tarjeta de fidelidad</span><span style="font-size:14px;font-weight:300;color:#A9A59B">{{stamps}} de 10 sellos · doble sello este mes</span></span>
+<span style="font-size:22px;font-weight:600;color:{{accent}}">{{stamps}}/10</span>
+</button>
+
+<footer style="margin:28px 24px 24px;display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:300;color:#8C887F">
+<span>[DIRECCIÓN], Resistencia · Lun a sáb [HORARIOS]</span>
+<span style="display:flex;flex-wrap:wrap;gap:0 18px">
+<a href="https://www.google.com/maps/search/?api=1&amp;query=Bunker+Barber+Club+Resistencia+Chaco" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;min-height:36px;text-decoration:underline">Cómo llegar</a>
+<a href="Barbero.dc.html" style="display:inline-flex;align-items:center;min-height:36px;text-decoration:underline">Acceso barberos</a>
+<a href="Dueno.dc.html" style="display:inline-flex;align-items:center;min-height:36px;text-decoration:underline">Central del dueño</a>
+</span>
+</footer>
+</div>
+</sc-if>
+
+<!-- ============ TURNO ============ -->
+<sc-if value="{{tabTurno}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:18px;padding:28px 16px 24px">
+
+<sc-if value="{{showWizard}}" hint-placeholder-val="{{true}}">
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;flex-direction:column;gap:10px;padding:0 4px">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">PASO {{step}} DE 5</span>
+<h1 style="margin:0;font-size:28px;font-weight:600">{{stepTitle}}</h1>
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="5"><span style="height:3px;border-radius:2px;background:{{b.c}}"></span></sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-if value="{{step1}}" hint-placeholder-val="{{true}}">
+<sc-for list="{{serviceOpts}}" as="o" hint-placeholder-count="3">
+<button type="button" onClick="{{o.pick}}" aria-pressed="{{o.on}}" style="display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;box-sizing:border-box;margin-bottom:10px;border-radius:16px;border:1.5px solid {{o.bd}};background:{{o.bg}};color:#EDEAE2;text-align:left">
+<span style="flex:0 0 26px;width:26px;height:26px;border-radius:50%;box-sizing:border-box;border:1.5px solid {{o.ck}};background:{{o.ckBg}};display:flex;align-items:center;justify-content:center"><sc-if value="{{o.on}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E0E0D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if></span>
+<span style="flex:1;display:flex;flex-direction:column"><span style="font-size:17px;font-weight:500">{{o.name}}</span><span style="font-size:13px;font-weight:300;color:#A9A59B">{{o.dur}}</span></span>
+<span style="font-size:17px;font-weight:600;color:{{o.price_c}}">{{o.price}}</span>
+</button>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{step2}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+<sc-for list="{{dayOpts}}" as="d" hint-placeholder-count="12">
+<button type="button" onClick="{{d.pick}}" aria-pressed="{{d.on}}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:62px;border-radius:14px;border:1.5px solid {{d.bd}};background:{{d.bg}};color:{{d.fg}}"><span style="font-size:12px;font-weight:400">{{d.label}}</span><span style="font-size:20px;font-weight:600;line-height:1.1">{{d.num}}</span></button>
+</sc-for>
+</div>
+<span style="font-size:13px;letter-spacing:.14em;color:#A9A59B;margin-top:6px">HORARIOS CON BARBERO LIBRE</span>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+<sc-for list="{{timeOpts}}" as="t" hint-placeholder-count="6">
+<button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="min-height:50px;border-radius:999px;border:1.5px solid {{t.bd}};background:{{t.bg}};color:{{t.fg}};font-size:16px;font-weight:500">{{t.time}}</button>
+</sc-for>
+</div>
+<sc-if value="{{noTimes}}" hint-placeholder-val="{{false}}"><span style="color:#A9A59B">Ese día no quedan horarios.</span></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{step3}}" hint-placeholder-val="{{false}}">
+<span style="font-size:14px;font-weight:300;color:#A9A59B;padding:0 4px">{{sumDay}} · {{sumTime}}</span>
+<sc-for list="{{barberOpts}}" as="o" hint-placeholder-count="2">
+<button type="button" onClick="{{o.pick}}" disabled="{{o.busy}}" aria-pressed="{{o.on}}" style="display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;box-sizing:border-box;margin-bottom:10px;border-radius:16px;border:1.5px solid {{o.bd}};background:{{o.bg}};color:#EDEAE2;text-align:left;opacity:{{o.op}}">
+<span style="flex:0 0 26px;width:26px;height:26px;border-radius:50%;box-sizing:border-box;border:1.5px solid {{o.ck}};background:{{o.ckBg}};display:flex;align-items:center;justify-content:center"><sc-if value="{{o.on}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E0E0D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if></span>
+<span style="flex:1;font-size:17px;font-weight:500">{{o.name}}</span>
+<span style="display:inline-flex;align-items:center;gap:8px;font-size:14px;color:#D6D2C8"><span style="width:9px;height:9px;border-radius:50%;background:{{o.dot}};box-shadow:0 0 8px {{o.dot}}"></span>{{o.status}}</span>
+</button>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{step4}}" hint-placeholder-val="{{false}}">
+<sc-for list="{{payOpts}}" as="o" hint-placeholder-count="3">
+<button type="button" onClick="{{o.pick}}" aria-pressed="{{o.on}}" style="display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;box-sizing:border-box;margin-bottom:10px;border-radius:16px;border:1.5px solid {{o.bd}};background:{{o.bg}};color:#EDEAE2;text-align:left">
+<span style="flex:0 0 26px;width:26px;height:26px;border-radius:50%;box-sizing:border-box;border:1.5px solid {{o.ck}};background:{{o.ckBg}};display:flex;align-items:center;justify-content:center"><sc-if value="{{o.on}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E0E0D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if></span>
+<span style="flex:1;display:flex;flex-direction:column"><span style="font-size:17px;font-weight:500">{{o.name}}</span><span style="font-size:13px;font-weight:300;color:#A9A59B">{{o.desc}}</span></span>
+</button>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{step5}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="padding:6px 18px;border-radius:20px;background:#1A1A18;border:1px solid #2A2A27">
+<sc-for list="{{summary}}" as="r" hint-placeholder-count="6">
+<div style="display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #2A2A27;font-size:15px"><span style="font-weight:300;color:#A9A59B">{{r.k}}</span><span style="font-weight:500;text-align:right">{{r.v}}</span></div>
+</sc-for>
+<div style="display:flex;justify-content:space-between;gap:12px;padding:14px 0"><span style="font-weight:500">Total</span><span style="font-size:22px;font-weight:600;color:{{accent}}">{{sumPrice}}</span></div>
+</div>
+<sc-if value="{{notRegistered}}" hint-placeholder-val="{{true}}">
+<form style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:15px;font-weight:500;padding:0 4px">Tus datos, solo la primera vez</span>
+<label for="r1" style="position:absolute;left:-9999px">Nombre y apellido</label>
+<input id="r1" type="text" autocomplete="name" value="{{fName}}" onChange="{{setName}}" placeholder="Nombre y apellido" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<label for="r2" style="position:absolute;left:-9999px">Teléfono</label>
+<input id="r2" type="tel" autocomplete="tel" value="{{fPhone}}" onChange="{{setPhone}}" placeholder="Teléfono" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<label for="r3" style="position:absolute;left:-9999px">Correo</label>
+<input id="r3" type="email" autocomplete="email" value="{{fEmail}}" onChange="{{setEmail}}" placeholder="Correo electrónico" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+</form>
+</sc-if>
+<sc-if value="{{registered}}" hint-placeholder-val="{{false}}"><span style="font-size:14px;font-weight:300;color:#A9A59B;padding:0 4px">Reservás como <span style="color:#EDEAE2;font-weight:500">{{rName}}</span></span></sc-if>
+</div>
+</sc-if>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 2fr;gap:10px">
+<button type="button" onClick="{{back}}" disabled="{{noBack}}" style="min-height:56px;border-radius:999px;border:1px solid #2E2E2A;background:transparent;color:{{backFg}};font-size:16px;font-weight:500">Atrás</button>
+<button type="button" onClick="{{primary}}" disabled="{{noPrimary}}" style="min-height:56px;border:0;border-radius:999px;background:{{primaryBg}};color:{{primaryFg}};font-size:17px;font-weight:600">{{primaryLabel}}</button>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-radius:16px;border:1px dashed #2E2E2A;font-size:14px;font-weight:300">
+<span>{{queueText}}</span>
+<button type="button" onClick="{{queueAction}}" style="flex:0 0 auto;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid #2E2E2A;background:transparent;color:#EDEAE2;font-size:14px">{{queueBtn}}</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showDone}}" hint-placeholder-val="{{false}}">
+<section style="display:flex;flex-direction:column;gap:14px;padding:24px;border-radius:24px;background:#1A1A18;border:1px solid {{accent}}">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">{{doneKicker}}</span>
+<span style="font-size:30px;font-weight:600;line-height:1.1">{{doneTitle}}</span>
+<span style="font-weight:300;color:#D6D2C8">{{sumService}} con {{sumBarber}}<br>{{sumDay}} · {{sumTime}} · {{sumPay}}</span>
+<sc-if value="{{waPending}}" hint-placeholder-val="{{true}}">
+<a href="{{waLink}}" target="_blank" rel="noopener" onClick="{{waSend}}" style="display:flex;align-items:center;justify-content:center;min-height:56px;border-radius:999px;background:#25D366;color:#0B2414;font-size:17px;font-weight:600">Confirmar por WhatsApp</a>
+<button type="button" onClick="{{cancelBooking}}" style="min-height:50px;border-radius:999px;border:1px solid #2E2E2A;background:transparent;color:#EDEAE2;font-size:15px">Cambiar turno</button>
+</sc-if>
+<sc-if value="{{waDone}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{goCuenta}}" style="min-height:56px;border:0;border-radius:999px;background:{{accent}};color:#0E0E0D;font-size:17px;font-weight:600">Ver mi cuenta</button>
+</sc-if>
+</section>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ============ FIDELIDAD ============ -->
+<sc-if value="{{tabFid}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:16px;padding:28px 16px 24px">
+<div style="display:flex;flex-direction:column;gap:4px;padding:0 4px">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">FIDELIDAD</span>
+<h1 style="margin:0;font-size:28px;font-weight:600">10 cortes, el próximo gratis</h1>
+</div>
+<section style="display:flex;flex-direction:column;gap:18px;padding:22px;border-radius:24px;background:#1A1A18;border:1px solid #2A2A27">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-size:13px;letter-spacing:.32em;font-weight:500">BUNKER</span><span style="font-size:14px;font-weight:300;color:#A9A59B">{{cardOwner}}</span></div>
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px">
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="10">
+<div style="aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;border-radius:50%;box-sizing:border-box;border:1.5px {{c.bs}} {{c.bd}};background:{{c.bg}};color:#6E6B63;font-size:13px">
+<sc-if value="{{c.stamped}}" hint-placeholder-val="{{false}}"><svg width="44%" height="44%" viewBox="0 0 24 24" fill="none" stroke="#0E0E0D" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if>
+<sc-if value="{{c.empty}}" hint-placeholder-val="{{true}}"><span style="color:{{c.fg}}">{{c.label}}</span></sc-if>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;justify-content:space-between;gap:10px;font-size:15px"><span style="font-weight:500">{{stamps}} de 10 sellos</span><span style="font-weight:300;color:#A9A59B">El 10.º es gratis</span></div>
+</section>
+<section style="display:flex;flex-direction:column;gap:6px;padding:20px 22px;border-radius:20px;background:{{accent}};color:#0E0E0D">
+<span style="font-size:13px;font-weight:600;letter-spacing:.18em">PROMO DEL MES</span>
+<span style="font-size:24px;font-weight:700">Doble sello</span>
+<span style="font-size:15px">Si volvés antes de 30 días, ese corte suma 2 sellos. Llegás al gratis en 6 visitas.</span>
+</section>
+<section style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-radius:20px;border:1px solid #2E2E2A">
+<span style="display:flex;flex-direction:column"><span style="font-size:16px;font-weight:500">Invitá a un amigo</span><span style="font-size:14px;font-weight:300;color:#A9A59B">20% para cada uno en su primer corte</span></span>
+<a href="{{inviteLink}}" target="_blank" rel="noopener" style="flex:0 0 auto;display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:999px;background:#25D366;color:#0B2414;font-size:14px;font-weight:600">Invitar</a>
+</section>
+</div>
+</sc-if>
+
+<!-- ============ PRODUCTOS ============ -->
+<sc-if value="{{tabProd}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:12px;padding:28px 16px 24px">
+<div style="display:flex;flex-direction:column;gap:4px;padding:0 4px 4px">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">PRODUCTOS</span>
+<h1 style="margin:0;font-size:28px;font-weight:600">Para tu peinado en casa</h1>
+<span style="font-size:14px;font-weight:300;color:#A9A59B">Sumalos a tu turno y los pagás en el local.</span>
+</div>
+<sc-for list="{{productCards}}" as="p" hint-placeholder-count="3">
+<article style="display:flex;flex-direction:column;gap:10px;padding:18px 20px;border-radius:20px;background:#1A1A18;border:1.5px solid {{p.bd}}">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h2 style="margin:0;font-size:18px;font-weight:500">{{p.name}}</h2><span style="font-size:14px;font-weight:500;color:{{accent}}">{{p.price}}</span></div>
+<span style="font-size:14px;font-weight:300;color:#A9A59B">{{p.use}}</span>
+<button type="button" onClick="{{p.toggle}}" aria-pressed="{{p.on}}" style="min-height:46px;border-radius:999px;border:1px solid {{accent}};background:{{p.bg}};color:{{p.fg}};font-size:15px;font-weight:500">{{p.btn}}</button>
+</article>
+</sc-for>
+</div>
+</sc-if>
+
+<!-- ============ MI CUENTA ============ -->
+<sc-if value="{{tabCuenta}}" hint-placeholder-val="{{false}}">
+<div style="display:flex;flex-direction:column;gap:14px;padding:28px 16px 24px">
+<sc-if value="{{notRegistered}}" hint-placeholder-val="{{true}}">
+<form style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B;padding:0 4px">MI CUENTA</span>
+<h1 style="margin:0 4px;font-size:28px;font-weight:600">Creá tu cuenta</h1>
+<span style="font-size:14px;font-weight:300;color:#A9A59B;padding:0 4px 6px">Una sola vez. Después la página te reconoce.</span>
+<label for="c1" style="position:absolute;left:-9999px">Nombre y apellido</label>
+<input id="c1" type="text" autocomplete="name" value="{{fName}}" onChange="{{setName}}" placeholder="Nombre y apellido" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<label for="c2" style="position:absolute;left:-9999px">Teléfono</label>
+<input id="c2" type="tel" autocomplete="tel" value="{{fPhone}}" onChange="{{setPhone}}" placeholder="Teléfono" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<label for="c3" style="position:absolute;left:-9999px">Correo</label>
+<input id="c3" type="email" autocomplete="email" value="{{fEmail}}" onChange="{{setEmail}}" placeholder="Correo electrónico" style="min-height:54px;padding:0 18px;border-radius:14px;background:#232320;border:1px solid #2A2A27;color:#EDEAE2;font-size:16px">
+<button type="button" onClick="{{register}}" disabled="{{regDisabled}}" style="margin-top:6px;min-height:56px;border:0;border-radius:999px;background:{{regBg}};color:{{regFg}};font-size:17px;font-weight:600">Crear cuenta</button>
+</form>
+</sc-if>
+<sc-if value="{{registered}}" hint-placeholder-val="{{false}}">
+<section style="display:flex;align-items:center;gap:14px;padding:18px 20px;border-radius:20px;background:#1A1A18;border:1px solid #2A2A27">
+<span style="flex:0 0 52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:{{accent}};color:#0E0E0D;font-size:22px;font-weight:600">{{initial}}</span>
+<span style="display:flex;flex-direction:column;min-width:0"><span style="font-size:18px;font-weight:600">{{rName}}</span><span style="font-size:14px;font-weight:300;color:#A9A59B;overflow:hidden;text-overflow:ellipsis">{{rPhone}} · {{rEmail}}</span></span>
+</section>
+<section style="display:flex;flex-direction:column;gap:10px;padding:18px 20px;border-radius:20px;background:#1A1A18;border:1px solid #2A2A27">
+<span style="font-size:13px;letter-spacing:.18em;color:#A9A59B">PRÓXIMO TURNO</span>
+<sc-if value="{{noAppt}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{goTurno}}" style="min-height:52px;border:0;border-radius:999px;background:{{accent}};color:#0E0E0D;font-size:16px;font-weight:600">Sacar turno</button>
+</sc-if>
+<sc-if value="{{hasAppt}}" hint-placeholder-val="{{true}}">
+<span style="font-size:20px;font-weight:600">{{sumDay}} · {{sumTime}}</span>
+<span style="font-size:14px;font-weight:300;color:#A9A59B">{{sumService}} con {{sumBarber}} · {{sumPay}}</span>
+<span style="display:inline-flex;align-items:center;gap:8px;font-size:14px"><span style="width:9px;height:9px;border-radius:50%;background:{{attDot}}"></span>{{attLabel}}</span>
+<button type="button" onClick="{{confirmAttendance}}" disabled="{{attDisabled}}" style="min-height:52px;border:0;border-radius:999px;background:{{attBg}};color:{{attFg}};font-size:16px;font-weight:600">{{attButton}}</button>
+</sc-if>
+</section>
+<button type="button" onClick="{{logout}}" style="align-self:flex-start;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid #2E2E2A;background:transparent;color:#A9A59B;font-size:13px">Cerrar sesión (demo)</button>
+</sc-if>
+</div>
+</sc-if>
+
+</div>
+
+<nav aria-label="Menú" style="position:sticky;bottom:0;z-index:3;background:#121211;border-top:1px solid #232320">
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));max-width:480px;margin:0 auto">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+<button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:68px;border:0;background:transparent;color:{{t.fg}};font-size:12px;font-weight:{{t.fw}}">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{t.fg}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{t.icon}}"></path></svg>
+{{t.label}}
+</button>
+</sc-for>
+</div>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F5C400","section":"Marca","options":["#F5C400","#E8A23A","#EDEAE2","#C8553D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      tab: 'inicio', step: 1,
+      service: '', day: 12, time: '', barber: '', pay: '', products: [],
+      registered: false, name: '', phone: '', email: '', fName: '', fPhone: '', fEmail: '',
+      booked: false, waSent: false, attendance: false, inQueue: false
+    };
+  }
+  componentDidMount() {
+    try {
+      const raw = window.localStorage.getItem('bunker_demo_cliente');
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && d.name) this.setState({ registered: true, name: d.name, phone: d.phone, email: d.email });
+      }
+    } catch (e) {}
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#F5C400';
+    const s = this.state;
+    const GREEN = '#4CC26A', RED = '#E0533D';
+    const money = (n) => '$' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const row = (on) => ({ on: on, bg: on ? '#26230F' : '#1A1A18', bd: on ? accent : '#2A2A27', ck: on ? accent : '#4A4842', ckBg: on ? accent : 'transparent', price_c: on ? accent : '#EDEAE2' });
+    const chip = (on) => ({ on: on, bg: on ? accent : '#1A1A18', fg: on ? '#0E0E0D' : '#EDEAE2', bd: on ? accent : '#2A2A27' });
+
+    const services = [
+      { id: 'corte', name: 'Corte', dur: '30 min', price: 15000 },
+      { id: 'combo', name: 'Corte + barba', dur: '50 min', price: 18000 },
+      { id: 'barba', name: 'Barba sola', dur: '20 min', price: 10000 }
+    ];
+    const barbers = [{ id: 'mauri', name: 'Mauri', nowBusy: true }, { id: 'ivan', name: 'Iván', nowBusy: false }];
+    const pays = [
+      { id: 'efectivo', name: 'Efectivo', desc: 'En el local' },
+      { id: 'transferencia', name: 'Transferencia', desc: 'Alias: [ALIAS]' },
+      { id: 'mp', name: 'Mercado Pago', desc: 'Link o QR en el local' }
+    ];
+    const products = [
+      { id: 'cera', name: 'Cera mate', price: '[PRECIO]', use: 'Fija sin brillo. Para texturizados y pelo corto.' },
+      { id: 'pomada', name: 'Pomada con brillo', price: '[PRECIO]', use: 'Brillo prolijo para peinados clásicos.' },
+      { id: 'aceite', name: 'Aceite para barba', price: '[PRECIO]', use: 'Hidrata y saca el frizz de la barba.' }
+    ];
+    const times = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const longDay = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const dowOf = (d) => (d - 1) % 7; // 1/11/2026 es domingo
+    const busy = (d, ti, bi) => ((d * 3 + ti * 5 + bi * 7) % 5) < 2;
+
+    const days = [];
+    for (let d = 12; d <= 25; d++) if (dowOf(d) !== 0) days.push(d);
+    const freeTimes = times.map((t, ti) => ({ t, ti })).filter((x) => barbers.some((b, bi) => !busy(s.day, x.ti, bi)));
+    const ti = times.indexOf(s.time);
+    const timeOk = freeTimes.some((x) => x.t === s.time);
+    const bIdx = barbers.findIndex((b) => b.id === s.barber);
+    const barberOk = timeOk && bIdx >= 0 && !busy(s.day, ti, bIdx);
+    const curService = services.find((x) => x.id === s.service);
+    const curPay = pays.find((x) => x.id === s.pay);
+
+    const regOk = s.fName.trim().length > 2 && s.fPhone.trim().length > 5 && s.fEmail.indexOf('@') > 0;
+    const can = { 1: !!curService, 2: timeOk, 3: barberOk, 4: !!curPay, 5: !!curService && timeOk && barberOk && !!curPay && (s.registered || regOk) };
+
+    const name = s.name || '';
+    const firstName = name.trim().split(' ')[0] || '';
+    const sumDay = longDay[dowOf(s.day)] + ' ' + s.day + '/11';
+    const prodNames = products.filter((p) => s.products.indexOf(p.id) >= 0).map((p) => p.name);
+    const waText = 'Hola Bunker! Soy ' + name + '. Confirmo mi turno: ' + (curService ? curService.name : '') + ' con ' + (barberOk ? barbers[bIdx].name : '') + ', ' + sumDay + ' a las ' + s.time + '. Pago: ' + (curPay ? curPay.name : '') + '.' + (prodNames.length ? ' Quiero sumar: ' + prodNames.join(', ') + '.' : '');
+
+    const doRegister = () => {
+      const d = { name: this.state.fName.trim(), phone: this.state.fPhone.trim(), email: this.state.fEmail.trim() };
+      try { window.localStorage.setItem('bunker_demo_cliente', JSON.stringify(d)); } catch (e) {}
+      return { registered: true, name: d.name, phone: d.phone, email: d.email };
+    };
+    const book = () => {
+      const extra = this.state.registered ? {} : doRegister();
+      this.setState({ ...extra, booked: true, waSent: false, attendance: false });
+    };
+
+    const stamps = s.registered ? 0 : 6;
+    const cells = [];
+    for (let i = 1; i <= 10; i++) {
+      const st = i <= stamps;
+      cells.push({ label: i === 10 ? 'Gratis' : String(i), fg: i === 10 ? accent : '#6E6B63', stamped: st, empty: !st, bg: st ? accent : 'transparent', bd: st || i === 10 ? accent : '#3A3934', bs: st || i === 10 ? 'solid' : 'dashed' });
+    }
+
+    const icons = {
+      inicio: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
+      turno: 'M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 2v4M16 2v4',
+      fidelidad: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z',
+      productos: 'M6 7h12l-1 13H7zM9 7a3 3 0 0 1 6 0',
+      cuenta: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0'
+    };
+    const tabDefs = [{ id: 'inicio', label: 'Inicio' }, { id: 'turno', label: 'Turno' }, { id: 'fidelidad', label: 'Fidelidad' }, { id: 'productos', label: 'Productos' }, { id: 'cuenta', label: 'Cuenta' }];
+    const titles = ['', 'Elegí el servicio', 'Elegí día y hora', 'Elegí barbero', '¿Cómo pagás?', 'Revisá y reservá'];
+
+    return {
+      accent: accent,
+      tabs: tabDefs.map((t) => { const on = s.tab === t.id; return { label: t.label, on: on, fg: on ? accent : '#8C887F', fw: on ? '600' : '400', icon: icons[t.id], pick: () => this.setState({ tab: t.id }) }; }),
+      tabInicio: s.tab === 'inicio', tabTurno: s.tab === 'turno', tabFid: s.tab === 'fidelidad', tabProd: s.tab === 'productos', tabCuenta: s.tab === 'cuenta',
+      goTurno: () => this.setState({ tab: 'turno' }),
+      goFid: () => this.setState({ tab: 'fidelidad' }),
+      goCuenta: () => this.setState({ tab: 'cuenta' }),
+      quickRows: [
+        { label: curService ? curService.name + ' · ' + money(curService.price) : 'Seleccionar corte', go: () => this.setState({ tab: 'turno', step: 1 }) },
+        { label: timeOk ? sumDay + ' · ' + s.time : 'Seleccionar fecha y horario', go: () => this.setState({ tab: 'turno', step: curService ? 2 : 1 }) },
+        { label: barberOk ? 'Con ' + barbers[bIdx].name : 'Seleccionar barbero', go: () => this.setState({ tab: 'turno', step: curService && timeOk ? 3 : 1 }) }
+      ],
+      team: barbers.map((b) => ({ name: b.name, dot: b.nowBusy ? RED : GREEN, status: b.nowBusy ? 'Se libera en 20 min' : 'Libre' })),
+
+      registered: s.registered, notRegistered: !s.registered,
+      rName: name, rPhone: s.phone, rEmail: s.email,
+      initial: firstName ? firstName.charAt(0).toUpperCase() : '',
+      cardOwner: s.registered ? name : 'Ejemplo',
+      cells: cells, stamps: stamps,
+      inviteLink: 'https://wa.me/?text=' + encodeURIComponent('Te invito a Bunker Barber Club! Si es tu primera vez, tenemos 20% de descuento cada uno. Reservá acá: [LINK DE LA WEB]'),
+
+      queueText: s.inQueue ? 'Estás en la fila: número 4 (~50 min)' : '¿Sin turno? 3 en la fila (~50 min)',
+      queueBtn: s.inQueue ? 'Salir' : (s.registered ? 'Anotarme' : 'Crear cuenta'),
+      queueAction: () => {
+        if (this.state.inQueue) this.setState({ inQueue: false });
+        else if (this.state.registered) this.setState({ inQueue: true });
+        else this.setState({ tab: 'cuenta' });
+      },
+
+      showWizard: !s.booked, showDone: s.booked,
+      step: s.step, stepTitle: titles[s.step],
+      bars: [1, 2, 3, 4, 5].map((n) => ({ c: n <= s.step ? accent : '#2A2A27' })),
+      step1: s.step === 1, step2: s.step === 2, step3: s.step === 3, step4: s.step === 4, step5: s.step === 5,
+      serviceOpts: services.map((x) => ({ ...row(s.service === x.id), name: x.name, dur: x.dur, price: money(x.price), pick: () => this.setState({ service: x.id }) })),
+      dayOpts: days.map((d) => ({ ...chip(s.day === d), label: dayNames[dowOf(d)], num: d, pick: () => this.setState({ day: d, time: '', barber: '' }) })),
+      timeOpts: freeTimes.map((x) => ({ ...chip(s.time === x.t), time: x.t, pick: () => this.setState({ time: x.t, barber: '' }) })),
+      noTimes: freeTimes.length === 0,
+      barberOpts: barbers.map((b, bi) => {
+        const isBusy = !timeOk || busy(s.day, ti, bi);
+        return { ...row(s.barber === b.id && !isBusy), name: b.name, busy: isBusy, op: isBusy ? '0.5' : '1', status: isBusy ? 'Ocupado' : 'Libre', dot: isBusy ? RED : GREEN, pick: () => this.setState({ barber: b.id }) };
+      }),
+      payOpts: pays.map((p) => ({ ...row(s.pay === p.id), name: p.name, desc: p.desc, pick: () => this.setState({ pay: p.id }) })),
+
+      summary: [
+        { k: 'Servicio', v: curService ? curService.name : '—' },
+        { k: 'Día', v: sumDay },
+        { k: 'Horario', v: s.time || '—' },
+        { k: 'Barbero', v: barberOk ? barbers[bIdx].name : '—' },
+        { k: 'Pago', v: curPay ? curPay.name : '—' },
+        { k: 'Productos', v: prodNames.length ? prodNames.join(', ') : 'Ninguno' }
+      ],
+      sumService: curService ? curService.name : '—',
+      sumPrice: curService ? money(curService.price) : '—',
+      sumDay: sumDay, sumTime: s.time || '—',
+      sumBarber: barberOk ? barbers[bIdx].name : '—',
+      sumPay: curPay ? curPay.name : '—',
+
+      back: () => this.setState({ step: Math.max(1, this.state.step - 1) }),
+      noBack: s.step === 1, backFg: s.step === 1 ? '#4A4842' : '#EDEAE2',
+      primary: () => { if (this.state.step < 5) this.setState({ step: this.state.step + 1 }); else book(); },
+      primaryLabel: s.step < 5 ? 'Siguiente →' : 'Reservar turno',
+      noPrimary: !can[s.step],
+      primaryBg: can[s.step] ? accent : '#2A2A27', primaryFg: can[s.step] ? '#0E0E0D' : '#8C887F',
+
+      fName: s.fName, fPhone: s.fPhone, fEmail: s.fEmail,
+      setName: (e) => this.setState({ fName: e.target.value }),
+      setPhone: (e) => this.setState({ fPhone: e.target.value }),
+      setEmail: (e) => this.setState({ fEmail: e.target.value }),
+      regDisabled: !regOk, regBg: regOk ? accent : '#2A2A27', regFg: regOk ? '#0E0E0D' : '#8C887F',
+      register: () => this.setState(doRegister()),
+      logout: () => {
+        try { window.localStorage.removeItem('bunker_demo_cliente'); } catch (e) {}
+        this.setState({ registered: false, name: '', phone: '', email: '', fName: '', fPhone: '', fEmail: '', booked: false, waSent: false, attendance: false, inQueue: false, step: 1 });
+      },
+
+      cancelBooking: () => this.setState({ booked: false, waSent: false, step: 1 }),
+      waLink: 'https://wa.me/5493625493647?text=' + encodeURIComponent(waText),
+      waSend: () => this.setState({ waSent: true }),
+      waPending: !s.waSent, waDone: s.waSent,
+      doneKicker: s.waSent ? 'LISTO' : 'ÚLTIMO PASO',
+      doneTitle: s.waSent ? 'Turno confirmado' : 'Confirmalo por WhatsApp',
+
+      productCards: products.map((p) => {
+        const on = s.products.indexOf(p.id) >= 0;
+        return {
+          name: p.name, price: p.price, use: p.use, on: on,
+          bd: on ? accent : '#2A2A27', bg: on ? accent : 'transparent', fg: on ? '#0E0E0D' : '#EDEAE2',
+          btn: on ? '✓ Sumado a mi turno' : 'Sumar a mi turno',
+          toggle: () => { const cur = this.state.products; this.setState({ products: on ? cur.filter((x) => x !== p.id) : cur.concat([p.id]) }); }
+        };
+      }),
+
+      hasAppt: s.booked, noAppt: !s.booked,
+      attDot: s.attendance ? GREEN : accent,
+      attLabel: !s.waSent ? 'Falta confirmar por WhatsApp' : (s.attendance ? 'Asistencia confirmada' : 'Falta confirmar tu asistencia'),
+      attButton: s.attendance ? 'Asistencia confirmada' : 'Confirmar asistencia',
+      attDisabled: s.attendance || !s.waSent,
+      attBg: s.attendance || !s.waSent ? '#2A2A27' : accent,
+      attFg: s.attendance || !s.waSent ? '#8C887F' : '#0E0E0D',
+      confirmAttendance: () => this.setState({ attendance: true })
+    };
+  }
+}
+</script>
+</body>
+</html>
