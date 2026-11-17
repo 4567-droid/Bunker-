@@ -307,7 +307,7 @@ export const POST = route(async (req, path) => {
       const name = str(body, 'name', { min: 2, max: 80, label: 'el nombre del cliente' });
       const phoneRaw = str(body, 'phone', { optional: true, max: 30 });
       const phone = phoneRaw ? normalizePhone(phoneRaw, areaFromWhatsapp(biz.whatsapp)) : null;
-      if (phoneRaw && !phone) fail(400, 'Revisá el teléfono (código de área y número).');
+      if (phoneRaw && !phone) fail(400, 'Revisá el teléfono: tiene que tener entre 6 y 15 números.');
       const appt = await tenantTx(biz.id, async (tx) => {
         const client = await findOrCreateClient(tx, biz, name, phone);
         const a = await createAppointment(

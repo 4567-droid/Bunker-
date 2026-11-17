@@ -25,15 +25,19 @@ export function areaFromWhatsapp(whatsapp: string | null | undefined): string | 
   return d.slice(0, 4);
 }
 
+/** Un teléfono tiene entre 6 y 15 números (15 es el máximo internacional) */
+export const PHONE_MIN = 6;
+export const PHONE_MAX = 15;
+
 /**
- * Normaliza un celular argentino a 10 dígitos (código de área + número),
- * sin 0, sin 15, sin +54 9. Devuelve null si no parece válido.
+ * Celular argentino a 10 dígitos (código de área + número), sin 0, sin 15, sin +54 9.
+ * Devuelve null si no tiene forma de número argentino.
  *  "+54 9 362 549-3647" → "3625493647"
  *  "0362 15 549 3647"   → "3625493647"
  *  "15 549-3647" o "549-3647" (sin código de área) → usa el del negocio: "3625493647"
  */
-export function normalizePhone(input: string, defaultArea?: string | null): string | null {
-  let d = String(input ?? '').replace(/\D/g, '');
+function argentinePhone(digits: string, defaultArea?: string | null): string | null {
+  let d = digits;
   // Número local sin código de área: se le agrega el del negocio
   if (defaultArea && d.length < 10) {
     const local = 10 - defaultArea.length;
@@ -60,9 +64,25 @@ export function normalizePhone(input: string, defaultArea?: string | null): stri
   return d;
 }
 
+/**
+ * Acepta cualquier teléfono. Si tiene forma de celular argentino se guarda con el formato
+ * de siempre (10 dígitos, así WhatsApp y el ingreso funcionan igual se escriba como se escriba).
+ * Si no (otro país, fijo, etc.), se guardan sus números tal cual, sin el "+" ni el "00".
+ * Devuelve null solo si tiene menos de 6 o más de 15 números.
+ */
+export function normalizePhone(input: string, defaultArea?: string | null): string | null {
+  const digits = String(input ?? '').replace(/\D/g, '');
+  const ar = argentinePhone(digits, defaultArea);
+  if (ar) return ar;
+  const d = digits.startsWith('00') ? digits.slice(2) : digits;
+  if (d.length < PHONE_MIN || d.length > PHONE_MAX) return null;
+  return d;
+}
+
 /** "362 549-3647" */
 export function phoneDisplay(d: string | null | undefined): string {
   if (!d) return '';
+  if (d.length > 10) return `+${d}`;
   if (d.length !== 10) return d;
   if (d.startsWith('11')) return `11 ${d.slice(2, 6)}-${d.slice(6)}`;
   return `${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6)}`;

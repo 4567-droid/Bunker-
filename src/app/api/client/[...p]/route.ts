@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
 
 function readPhone(raw: string, biz: Business): string {
   const phone = normalizePhone(raw, areaFromWhatsapp(biz.whatsapp));
-  if (!phone) fail(400, 'Revisá el teléfono: código de área y número, sin 0 ni 15. Ej: 362 549-3647');
+  if (!phone) fail(400, 'Revisá el teléfono: tiene que tener entre 6 y 15 números. Ej: 362 549-3647');
   return phone;
 }
 

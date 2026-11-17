@@ -90,7 +90,7 @@ test('registro con y sin invitación', async () => {
   assert.equal(r.status, 409);
 });
 
-test('teléfono sin código de área: se completa con el del local (362)', async () => {
+test('teléfono: sin código de área se completa con el 362, y se acepta cualquier otro número', async () => {
   const x = agent();
   let r = await x.post('/api/client/register', { name: 'Luis Local', phone: '15 488-8888' });
   assert.equal(r.status, 201, JSON.stringify(r.data));
@@ -98,7 +98,14 @@ test('teléfono sin código de área: se completa con el del local (362)', async
   r = await agent().post('/api/client/login', { phone: '488 8888' });
   assert.equal(r.status, 200, 'entra también con el número corto');
   r = await agent().post('/api/client/register', { name: 'Otro Corto', phone: '12345' });
-  assert.equal(r.status, 400);
+  assert.equal(r.status, 400, 'menos de 6 números');
+  // Cualquier otro número sirve: de otro país, fijo, etc.
+  r = await agent().post('/api/client/register', { name: 'Ana Paraguay', phone: '+595 981 123456' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.client.phone, '595981123456');
+  assert.equal(r.data.client.phoneDisplay, '+595981123456');
+  r = await agent().post('/api/client/login', { phone: '00595 981 123 456' });
+  assert.equal(r.status, 200, 'entra escribiéndolo de otra forma');
 });
 
 test('ingreso: si cargó correo, se pide el correo', async () => {

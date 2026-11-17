@@ -2,7 +2,7 @@
 
 import { Field } from '@/components/ui';
 import { api } from '@/lib/api-client';
-import { isEmail, normalizePhone, phoneDisplay } from '@/lib/format';
+import { isEmail, normalizePhone, PHONE_MIN, phoneDisplay } from '@/lib/format';
 import type { Me } from './app-context';
 
 export type AuthMode = 'register' | 'login';
@@ -23,7 +23,9 @@ export function authProblem(mode: AuthMode, v: AuthValues, area?: string | null)
   const digits = v.phone.replace(/\D/g, '');
   if (!digits) return 'Escribí tu teléfono.';
   if (!normalizePhone(v.phone, area)) {
-    return `Revisá el teléfono: ${digits.length} números. Escribilo con código de área (ej: 362 549-3647) o solo tu número (ej: 15 549-3647).`;
+    return digits.length < PHONE_MIN
+      ? `El teléfono es muy corto (${digits.length} números). Escribilo completo, por ejemplo 362 549-3647.`
+      : `El teléfono es muy largo (${digits.length} números). Revisá que no esté repetido.`;
   }
   if (v.email.trim() && !isEmail(v.email.trim())) return 'Revisá el correo (ej: nombre@gmail.com) o dejalo vacío: es opcional.';
   return null;
@@ -38,7 +40,7 @@ export function phonePreview(v: AuthValues, area?: string | null): string | null
   const p = normalizePhone(v.phone, area);
   if (!p) return null;
   const typed = v.phone.replace(/\D/g, '');
-  return typed.length < 10 ? `Queda como ${phoneDisplay(p)}` : null;
+  return typed.length < 10 && p.length === 10 && p !== typed ? `Queda como ${phoneDisplay(p)}` : null;
 }
 
 export function submitAuth(mode: AuthMode, v: AuthValues, ref?: string | null, area?: string | null): Promise<Me> {
