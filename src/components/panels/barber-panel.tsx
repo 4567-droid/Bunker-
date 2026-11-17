@@ -176,16 +176,28 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
     }
   }, []);
 
+  // Se actualiza solo cada tanto mientras la pantalla está a la vista, y apenas vuelve
+  // (por ejemplo, después de mandar un WhatsApp)
   useEffect(() => {
     loadAgenda(day);
-    const t = setInterval(() => loadAgenda(day), 30_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => document.visibilityState === 'visible' && loadAgenda(day), 30_000);
+    const onVis = () => document.visibilityState === 'visible' && loadAgenda(day);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [day, loadAgenda]);
 
   useEffect(() => {
     loadQueue();
-    const t = setInterval(loadQueue, 15_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => document.visibilityState === 'visible' && loadQueue(), 15_000);
+    const onVis = () => document.visibilityState === 'visible' && loadQueue();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [loadQueue]);
 
   // La respuesta de cada acción ya trae la agenda y la fila nuevas (?view=día): un solo viaje

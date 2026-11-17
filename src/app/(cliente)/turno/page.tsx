@@ -43,6 +43,7 @@ export default function Turno() {
 
   const service = config.services.find((s) => s.id === draft.serviceId) ?? null;
   const registered = !!me?.client;
+  const upcoming = (me?.upcoming ?? []).filter((a) => a.status === 'booked');
 
   // ?paso=N desde la portada
   useEffect(() => {
@@ -162,7 +163,8 @@ export default function Turno() {
       window.scrollTo({ top: 0 });
     } catch (e) {
       setError((e as Error).message);
-      setSlotsKey((k) => k + 1);
+      if ((e as Error & { code?: string }).code === 'needs_email') setMode('login');
+      else setSlotsKey((k) => k + 1);
     } finally {
       setBusy(false);
     }
@@ -170,6 +172,7 @@ export default function Turno() {
 
   async function changeBooking() {
     if (!booked) return;
+    if (!window.confirm('Se libera este horario para que elijas otro. ¿Seguimos?')) return;
     setBusy(true);
     try {
       await api('/api/client/cancel', { id: booked.id });
@@ -322,6 +325,20 @@ export default function Turno() {
         </div>
       </div>
 
+      {step === 1 && upcoming.length > 0 && (
+        <Link href="/cuenta" className="flex flex-col gap-0.5 rounded-2xl border border-line-2 bg-card px-4 py-3">
+          <span className="text-sm font-light text-muted">{upcoming.length > 1 ? 'Ya tenés 2 turnos' : 'Ya tenés turno'}</span>
+          {upcoming.map((a) => (
+            <span key={a.id} className="text-[15px] font-medium">
+              {a.dayLabel} · {a.time} con {a.barberName}
+            </span>
+          ))}
+          <span className="text-[13px] font-light text-muted">
+            {upcoming.length > 1 ? 'Para sacar otro, cancelá uno desde Cuenta →' : 'Podés sacar otro más. Verlo en Cuenta →'}
+          </span>
+        </Link>
+      )}
+
       <div className="fade-in flex flex-col gap-2.5" key={step}>
         {step === 1 &&
           config.services.map((s) => (
@@ -467,25 +484,30 @@ export default function Turno() {
         )}
       </div>
 
-      <ErrorNote text={error} />
-
-      <div className="grid grid-cols-[1fr_2fr] gap-2.5">
-        <button
-          type="button"
-          onClick={() => go(Math.max(1, step - 1))}
-          disabled={step === 1}
-          className={`min-h-14 rounded-full border border-line-2 bg-transparent text-base font-medium ${step === 1 ? 'text-off' : 'text-ink'}`}
-        >
-          Atrás
-        </button>
-        <button
-          type="button"
-          onClick={primary}
-          disabled={busy}
-          className={`min-h-14 rounded-full border-0 text-[17px] font-semibold ${primaryOk && !busy ? 'bg-accent text-bg' : 'bg-line text-dim'}`}
-        >
-          {busy ? 'Reservando…' : step < 5 ? 'Siguiente →' : 'Reservar turno'}
-        </button>
+      {/* Atrás / Siguiente quedan siempre a mano, arriba del menú */}
+      <div
+        className="sticky z-10 -mx-4 flex flex-col gap-2.5 bg-gradient-to-t from-bg from-70% to-transparent px-4 pt-4 pb-3"
+        style={{ bottom: 'calc(69px + env(safe-area-inset-bottom))' }}
+      >
+        <ErrorNote text={error} />
+        <div className="grid grid-cols-[1fr_2fr] gap-2.5">
+          <button
+            type="button"
+            onClick={() => go(Math.max(1, step - 1))}
+            disabled={step === 1}
+            className={`min-h-14 rounded-full border border-line-2 bg-transparent text-base font-medium ${step === 1 ? 'text-off' : 'text-ink'}`}
+          >
+            Atrás
+          </button>
+          <button
+            type="button"
+            onClick={primary}
+            disabled={busy}
+            className={`min-h-14 rounded-full border-0 text-[17px] font-semibold ${primaryOk && !busy ? 'bg-accent text-bg' : 'bg-line text-dim'}`}
+          >
+            {busy ? 'Reservando…' : step < 5 ? 'Siguiente →' : 'Reservar turno'}
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-dashed border-line-2 px-4 py-3.5 text-sm font-light">

@@ -8,7 +8,8 @@ Este archivo explica todo el proyecto. Leelo completo antes de programar y respe
 - Cliente: **Bunker Barber Club** (Instagram @bunkerbarberclub, "since 2019"), Resistencia, Chaco.
 - Barberos: **Mauri** e **Iván**.
 - Hoy atienden por orden de llegada. El sistema suma turnos online **sin sacar la fila** de los que llegan sin turno.
-- WhatsApp de la barbería: **+54 9 362 549-3647** (`wa.me/5493625493647`).
+- WhatsApp de la barbería: **+54 9 362 449-3647** (`wa.me/5493624493647`). Cambiado el 17/11/2026 (antes figuraba 362 549-3647).
+- Instagram: https://www.instagram.com/bunkerbarberclub · Dirección: Calle Isabel la Católica, H3506 Resistencia, Chaco.
 - Más adelante el mismo código tiene que servir para otros negocios (otras barberías, uñas, consultorios): cada negocio con su nombre, colores, logo y dominio, todos manejados desde un panel de administrador.
 
 ## Material de referencia (en esta carpeta)
@@ -137,7 +138,7 @@ Cada usuario ve solo datos de su negocio. Esto se controla con RLS en la base, n
 
 ## Datos a completar (hoy son placeholders)
 
-- Dirección, horarios de atención, alias para transferencias.
+- Horarios de atención reales, alias para transferencias y la altura de la dirección (hoy: Calle Isabel la Católica, sin número).
 - Fotos del local, de los barberos y de los productos, y precios de productos.
 - Dominio (opción más barata: `bunkerbarberclub.com.ar` en NIC Argentina, con Clave Fiscal nivel 2).
 
@@ -189,6 +190,16 @@ Velocidad e historial:
 - Cada pedido hace las menos idas a la base posibles: sesión + usuario en una consulta, negocio en una consulta,
   y las acciones del barbero devuelven la agenda nueva (`?view=día`).
 - Central → "Todos los meses" (`/api/owner/months`): ganancia, ingresos, gastos y cortes de cada mes.
+
+Revisión del 17/11/2026 (migración `003_datos_bunker.sql` con WhatsApp, Instagram y dirección reales):
+
+- Globo de WhatsApp fijo (`src/components/client/wa-bubble.tsx`) en Inicio y Productos; en Turno, Fidelidad y
+  Cuenta no se muestra porque taparía botones. Tarjeta "Dónde estamos" en Inicio (Cómo llegar, Instagram, WhatsApp).
+- En Ajustes el WhatsApp, Instagram y Maps se aceptan como los escriba el dueño (`whatsappIntl`, `instagramHandle`,
+  `mapsHref` en `format.ts`); los links solo pueden ser https. Horarios con listas en 24 h.
+- "Crear cuenta" con un teléfono que ya tiene cuenta entra a esa cuenta (si tiene correo, lo pide: código `needs_email`).
+- El corte gratis de la tarjeta vale para un solo turno reservado a la vez.
+- Turno: Atrás/Siguiente fijos abajo, aviso de los turnos que ya tiene, confirmación antes de "Cambiar turno".
 
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

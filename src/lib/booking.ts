@@ -203,7 +203,10 @@ export async function listSlots(tx: Tx, biz: Business, service: ServiceRow, day:
 async function pricing(tx: Tx, biz: Business, client: ClientRow | null, service: ServiceRow) {
   if (!client) return { pct: 0, reason: null as string | null, rewardId: null as string | null, loyaltyFree: false };
   if (nextIsFree(client.stamps, biz.loyalty_goal)) {
-    return { pct: 100, reason: 'Corte gratis · tarjeta de fidelidad', rewardId: null, loyaltyFree: true };
+    // El corte gratis es uno solo: si ya tiene otro turno reservado como gratis, este se cobra
+    const [taken] = await tx`select 1 from appointments
+                             where client_id = ${client.id} and loyalty_free and status in ('booked', 'in_progress') limit 1`;
+    if (!taken) return { pct: 100, reason: 'Corte gratis · tarjeta de fidelidad', rewardId: null, loyaltyFree: true };
   }
   const [r] = await tx<{ id: string; kind: string; percent: number }[]>`
     select id, kind, percent from rewards

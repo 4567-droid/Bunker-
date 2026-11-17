@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
 
 function readPhone(raw: string, biz: Business): string {
   const phone = normalizePhone(raw, areaFromWhatsapp(biz.whatsapp));
-  if (!phone) fail(400, 'Revisá el teléfono: tiene que tener entre 6 y 15 números. Ej: 362 549-3647');
+  if (!phone) fail(400, 'Revisá el teléfono: tiene que tener entre 6 y 15 números. Ej: 362 412-3456');
   return phone;
 }
 
@@ -197,6 +197,20 @@ export const POST = route(async (req, [action]) => {
       const email = str(body, 'email', { optional: true, max: 120 }).toLowerCase();
       if (email && !isEmail(email)) fail(400, 'Revisá el correo electrónico.');
       const ref = str(body, 'ref', { optional: true, max: 20 }).toUpperCase();
+
+      // Ya tenía cuenta con ese teléfono: entra como en "Ya tengo cuenta" (teléfono, y el correo si cargó uno)
+      const [existing] = await tenantTx(biz.id, (tx) => tx<ClientRow[]>`
+        select * from clients where business_id = ${biz.id} and phone = ${phone}`);
+      if (existing) {
+        const keys = [`cl:${ip}`, `cl:${biz.id}:${phone}`];
+        await guardAttempts(keys);
+        if (existing.email && existing.email.toLowerCase() !== email) {
+          await recordFailure(keys);
+          fail(409, 'Ese teléfono ya tiene cuenta. Para entrar, escribí el correo con el que te registraste.', 'needs_email');
+        }
+        await startSession('client', { businessId: biz.id, clientId: existing.id });
+        return json(await tenantTx(biz.id, (tx) => mePayload(tx, biz, existing, now)));
+      }
 
       const client = await tenantTx(biz.id, async (tx) => {
         const [exists] = await tx`select 1 from clients where business_id = ${biz.id} and phone = ${phone}`;

@@ -112,6 +112,7 @@ export default function Cuenta() {
       setForm(EMPTY_AUTH);
     } catch (e) {
       setError((e as Error).message);
+      if ((e as Error & { code?: string }).code === 'needs_email') setMode('login');
     } finally {
       setBusy(false);
     }

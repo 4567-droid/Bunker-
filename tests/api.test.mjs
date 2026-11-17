@@ -86,8 +86,10 @@ test('registro con y sin invitación', async () => {
   assert.equal(r.data.rewards[0].kind, 'welcome');
   assert.equal(r.data.rewards[0].from, 'Ana');
 
+  // Si ya tenía cuenta (sin correo), "crear cuenta" lo hace entrar a la suya en vez de trabarse
   r = await agent().post('/api/client/register', { name: 'Otro Bruno', phone: '+54 9 362 422-2222' });
-  assert.equal(r.status, 409);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.client.name, 'Bruno Díaz', 'entra a la cuenta que ya existía, sin crear otra');
 });
 
 test('teléfono: sin código de área se completa con el 362, y se acepta cualquier otro número', async () => {
@@ -119,6 +121,13 @@ test('ingreso: si cargó correo, se pide el correo', async () => {
   assert.equal(r.data.client.name, 'Carla Gómez');
   r = await other.post('/api/client/login', { phone: '3629999999' });
   assert.equal(r.status, 404);
+  // "Crear cuenta" con un teléfono que ya tiene correo: pide el correo
+  r = await agent().post('/api/client/register', { name: 'Carla Otra', phone: '362 433-3333' });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.code, 'needs_email');
+  r = await agent().post('/api/client/register', { name: 'Carla Gómez', phone: '362 433-3333', email: 'carla@mail.com' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.client.name, 'Carla Gómez');
 });
 
 test('días y horarios libres', async () => {
@@ -226,7 +235,15 @@ test('tarjeta llena: el 10.º corte es gratis', async () => {
   let r = await bruno.post('/api/client/book', { serviceId: ctx.svc['Barba sola'], day: DAY, time: '16:00', barberId: ctx.barber.Mauri, payment: 'efectivo' });
   assert.equal(r.status, 201);
   assert.equal(r.data.appointment.finalPrice, 0);
-  r = await mauri.post('/api/barber/complete', { id: r.data.appointment.id });
+  const freeId = r.data.appointment.id;
+  // El corte gratis es uno solo: un segundo turno reservado se cobra
+  const q2 = await bruno.get(`/api/client/quote?service=${ctx.svc['Barba sola']}`);
+  assert.equal(q2.data.discountPct, 0);
+  r = await bruno.post('/api/client/book', { serviceId: ctx.svc['Barba sola'], day: DAY, time: '19:00', barberId: ctx.barber.Mauri, payment: 'efectivo' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.appointment.finalPrice, 10000);
+  assert.equal((await bruno.post('/api/client/cancel', { id: r.data.appointment.id })).status, 200);
+  r = await mauri.post('/api/barber/complete', { id: freeId });
   assert.equal(r.data.free, true);
   const me = await bruno.get('/api/client/me');
   assert.equal(me.data.client.stamps, 0);
@@ -311,6 +328,27 @@ test('central del dueño: ingresos, gastos y ajustes', async () => {
   assert.equal((await mauri.get('/api/owner/months')).status, 401, 'un barbero no ve el historial');
 
   const st = await owner.get('/api/owner/settings');
+  // WhatsApp, Instagram y Maps: se aceptan como los escribe cualquiera
+  const b = st.data.business;
+  r = await owner.post('/api/owner/business', { ...b, mapsUrl: 'javascript:alert(1)' });
+  assert.equal(r.status, 400, 'nada de links raros');
+  r = await owner.post('/api/owner/business', { ...b, instagram: 'no vale con espacios' });
+  assert.equal(r.status, 400);
+  r = await owner.post('/api/owner/business', {
+    ...b,
+    whatsapp: '0362 15 449-3647',
+    instagram: 'https://www.instagram.com/bunkerbarberclub?rpxt=MTVrcjBkM3JybmF4bw==',
+    mapsUrl: '',
+    address: 'Calle Isabel la Católica',
+    city: 'H3506 Resistencia, Chaco',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const st2 = await owner.get('/api/owner/settings');
+  assert.equal(st2.data.business.whatsapp, '362 449-3647');
+  assert.equal(st2.data.business.instagram, 'bunkerbarberclub');
+  const cfg0 = await pub.get('/api/public/config');
+  assert.equal(cfg0.data.business.whatsapp, '5493624493647');
+  assert.equal(cfg0.data.business.address, 'Calle Isabel la Católica');
   const corte = st.data.services.find((s) => s.name === 'Corte');
   r = await owner.post('/api/owner/service/update', { ...corte, price: 16000 });
   assert.equal(r.status, 200);

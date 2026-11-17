@@ -5,13 +5,15 @@ export class HttpError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Para que la pantalla sepa qué hacer (ej: 'needs_email' → pasar a "Ya tengo cuenta") */
+    public code?: string,
   ) {
     super(message);
   }
 }
 
-export function fail(status: number, message: string): never {
-  throw new HttpError(status, message);
+export function fail(status: number, message: string, code?: string): never {
+  throw new HttpError(status, message, code);
 }
 
 export function json(data: unknown, status = 200): NextResponse {
@@ -98,7 +100,7 @@ export function route(handler: Handler) {
 }
 
 export function toErrorResponse(e: unknown): Response {
-  if (e instanceof HttpError) return json({ error: e.message }, e.status);
+  if (e instanceof HttpError) return json(e.code ? { error: e.message, code: e.code } : { error: e.message }, e.status);
   const code = (e as { code?: string })?.code;
   if (code === '23P01') return json({ error: 'Ese horario se acaba de ocupar. Elegí otro.' }, 409);
   if (code === '23505') return json({ error: 'Ya existe un registro con esos datos.' }, 409);

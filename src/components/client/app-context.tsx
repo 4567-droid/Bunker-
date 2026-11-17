@@ -154,7 +154,8 @@ export function ClientApp({ config, children }: { config: PublicConfig; children
   useEffect(() => {
     refreshMe();
     refreshLive();
-    const t = setInterval(refreshLive, 15_000);
+    // Con la pestaña en segundo plano no se consulta (ahorra batería y pedidos); al volver se actualiza
+    const t = setInterval(() => document.visibilityState === 'visible' && refreshLive(), 15_000);
     const onVis = () => {
       if (document.visibilityState === 'visible') {
         refreshLive();
