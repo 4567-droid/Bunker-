@@ -1,6 +1,6 @@
 import { endSessionsFor, hashPassword, normUser } from '@/lib/auth';
 import { apptDto, bizNow, blockDto, businessCuts, createBlocks, loadBlocks, parseBlockInput, type ApptRow } from '@/lib/booking';
-import { phoneDisplay } from '@/lib/format';
+import { areaFromWhatsapp, instagramHandle, phoneDisplay, whatsappIntl } from '@/lib/format';
 import { dropImage, saveImage } from '@/lib/images';
 import { currentBusiness, forgetBusinessCache, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
@@ -237,7 +237,8 @@ async function settings(tx: Tx, biz: Business) {
       name: b.name,
       address: b.address,
       city: b.city,
-      whatsapp: b.whatsapp,
+      // En Ajustes se ve como lo escribe cualquiera: 362 449-3647
+      whatsapp: b.whatsapp && /^549\d{10}$/.test(b.whatsapp) ? phoneDisplay(b.whatsapp.slice(3)) : b.whatsapp,
       instagram: b.instagram,
       mapsUrl: b.maps_url,
       transferAlias: b.transfer_alias,
@@ -300,19 +301,22 @@ const optText = (b: Body, k: string, max = 200) => {
   return v || null;
 };
 
-function mpLink(b: Body): string | null {
-  const v = optText(b, 'mpLink', 300);
+/** Link https (Mercado Pago, Google Maps): se acepta con o sin https://, nunca javascript: ni otros */
+function httpsLink(b: Body, key: string, message: string): string | null {
+  const v = optText(b, key, 400);
   if (!v) return null;
   let u: URL;
   try {
     u = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
   } catch {
-    fail(400, 'Revisá el link de Mercado Pago (ej: https://link.mercadopago.com.ar/bunker).');
+    fail(400, message);
   }
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') fail(400, 'Revisá el link de Mercado Pago.');
+  if ((u.protocol !== 'https:' && u.protocol !== 'http:') || !u.hostname.includes('.')) fail(400, message);
   u.protocol = 'https:';
   return u.toString();
 }
+
+const mpLink = (b: Body) => httpsLink(b, 'mpLink', 'Revisá el link de Mercado Pago (ej: https://link.mercadopago.com.ar/bunker).');
 
 export const GET = route(async (req, [action]) => {
   const biz = await currentBusiness();
@@ -452,13 +456,18 @@ export const POST = route(async (req, path) => {
 
       case 'business': {
         const hours = body.hours !== undefined ? parseHours(body.hours) : biz.hours;
-        const whatsapp = optText(body, 'whatsapp', 20)?.replace(/\D/g, '') || null;
+        const waRaw = optText(body, 'whatsapp', 30);
+        const whatsapp = waRaw ? whatsappIntl(waRaw, areaFromWhatsapp(biz.whatsapp) ?? '362') : null;
+        if (waRaw && !whatsapp) fail(400, 'Revisá el WhatsApp (ej: 362 449-3647).');
+        const igRaw = optText(body, 'instagram', 200);
+        const instagram = igRaw ? instagramHandle(igRaw) : null;
+        if (igRaw && !instagram) fail(400, 'Revisá el Instagram: pegá el link del perfil o escribí el usuario (ej: bunkerbarberclub).');
         await tx`update businesses set
                    address = ${optText(body, 'address', 120)},
                    city = ${optText(body, 'city', 80)},
                    whatsapp = ${whatsapp},
-                   instagram = ${optText(body, 'instagram', 60)?.replace(/^@/, '') ?? null},
-                   maps_url = ${optText(body, 'mapsUrl', 400)},
+                   instagram = ${instagram},
+                   maps_url = ${httpsLink(body, 'mapsUrl', 'Revisá el link de Google Maps (o dejalo vacío: se arma solo con la dirección).')},
                    transfer_alias = ${optText(body, 'transferAlias', 60)},
                    mp_link = ${mpLink(body)},
                    hours = ${tx.json(hours)},

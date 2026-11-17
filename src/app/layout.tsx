@@ -23,7 +23,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();
   const host = (h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000').split(',')[0].trim();
   const proto = (h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')).split(',')[0].trim();
-  const description = `Sacá tu turno en ${name}: elegí servicio, horario y barbero. Tarjeta de fidelidad y ${biz?.referral_percent ?? 20}% para vos y un amigo.`;
+  const where = biz?.city ? ` (${biz.city.replace(/^[A-Z]\d{4}\s*/, '')})` : '';
+  const description = `Sacá tu turno en ${name}${where}: elegí servicio, horario y barbero. Tarjeta de fidelidad y ${biz?.referral_percent ?? 20}% para vos y un amigo.`;
   const image = own ? '/brand/og-bunker.png' : biz?.logo_url;
   return {
     metadataBase: new URL(`${proto}://${host}`),

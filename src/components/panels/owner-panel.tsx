@@ -6,7 +6,7 @@ import { api } from '@/lib/api-client';
 import { money } from '@/lib/format';
 import { addDays, DAY_LONG, DAY_SHORT, dow, type Hours } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
-import { BlockForm, BlocksList, PasswordForm, PhotoPicker, type Block } from './shared';
+import { BlockForm, BlocksList, PasswordForm, PhotoPicker, TimeField, type Block } from './shared';
 
 interface MoneyRow {
   id: string;
@@ -837,9 +837,9 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
       <Section title="Datos del negocio">
         <Small label="Dirección" value={biz.address ?? ''} onChange={(v) => set({ address: v })} placeholder="Ej: Av. Sarmiento 1234" />
         <Small label="Ciudad" value={biz.city ?? ''} onChange={(v) => set({ city: v })} />
-        <Small label="WhatsApp (con 549)" value={biz.whatsapp ?? ''} onChange={(v) => set({ whatsapp: v })} placeholder="5493625493647" />
-        <Small label="Instagram" value={biz.instagram ?? ''} onChange={(v) => set({ instagram: v })} />
-        <Small label="Link de Google Maps" value={biz.mapsUrl ?? ''} onChange={(v) => set({ mapsUrl: v })} />
+        <Small label="WhatsApp de la barbería" value={biz.whatsapp ?? ''} onChange={(v) => set({ whatsapp: v })} placeholder="362 449-3647" />
+        <Small label="Instagram (usuario o link del perfil)" value={biz.instagram ?? ''} onChange={(v) => set({ instagram: v })} placeholder="bunkerbarberclub" />
+        <Small label="Link de Google Maps (opcional: si lo dejás vacío se arma con la dirección)" value={biz.mapsUrl ?? ''} onChange={(v) => set({ mapsUrl: v })} placeholder="https://maps.app.goo.gl/..." />
         <Small label="Alias para transferencias" value={biz.transferAlias ?? ''} onChange={(v) => set({ transferAlias: v })} />
         <Small label="Link de pago de Mercado Pago" value={biz.mpLink ?? ''} onChange={(v) => set({ mpLink: v })} placeholder="https://link.mercadopago.com.ar/..." />
       </Section>
@@ -858,8 +858,8 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
               </div>
               {ranges.map(([a, b], i) => (
                 <div key={i} className="flex items-end gap-2">
-                  <Small label="Abre" type="time" value={a} onChange={(v) => setRanges(ranges.map((r, k) => (k === i ? [v, r[1]] : r)))} />
-                  <Small label="Cierra" type="time" value={b} onChange={(v) => setRanges(ranges.map((r, k) => (k === i ? [r[0], v] : r)))} />
+                  <TimeField id={`h${d}-${i}a`} label="Abre" value={a} onChange={(v) => setRanges(ranges.map((r, k) => (k === i ? [v, r[1]] : r)))} />
+                  <TimeField id={`h${d}-${i}b`} label="Cierra" value={b} onChange={(v) => setRanges(ranges.map((r, k) => (k === i ? [r[0], v] : r)))} />
                   <button type="button" aria-label="Quitar horario" onClick={() => setRanges(ranges.filter((_, k) => k !== i))} className="h-12 w-11 shrink-0 rounded-xl border border-line-2 text-dim">
                     ×
                   </button>

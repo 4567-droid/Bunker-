@@ -14,7 +14,7 @@ const AREA3 = new Set([
   '376', '379', '380', '381', '383', '385', '387', '388',
 ]);
 
-/** Código de área del negocio, sacado de su WhatsApp ("5493625493647" → "362") */
+/** Código de área del negocio, sacado de su WhatsApp ("5493624493647" → "362") */
 export function areaFromWhatsapp(whatsapp: string | null | undefined): string | null {
   let d = String(whatsapp ?? '').replace(/\D/g, '');
   if (d.startsWith('549')) d = d.slice(3);
@@ -79,13 +79,40 @@ export function normalizePhone(input: string, defaultArea?: string | null): stri
   return d;
 }
 
-/** "362 549-3647" */
+/** "362 449-3647" (o "3722 45-6789" si el código de área es de 4) */
 export function phoneDisplay(d: string | null | undefined): string {
   if (!d) return '';
   if (d.length > 10) return `+${d}`;
   if (d.length !== 10) return d;
   if (d.startsWith('11')) return `11 ${d.slice(2, 6)}-${d.slice(6)}`;
-  return `${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6)}`;
+  if (AREA3.has(d.slice(0, 3))) return `${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6)}`;
+  return `${d.slice(0, 4)} ${d.slice(4, 6)}-${d.slice(6)}`;
+}
+
+/**
+ * WhatsApp del negocio en formato internacional (lo que necesita wa.me), se escriba como se escriba:
+ * "362 449-3647", "0362 15 449-3647" o "+54 9 362 449-3647" → "5493624493647".
+ */
+export function whatsappIntl(input: string, defaultArea?: string | null): string | null {
+  const d = normalizePhone(input, defaultArea);
+  if (!d) return null;
+  return d.length === 10 ? `549${d}` : d;
+}
+
+/** Usuario de Instagram desde lo que peguen: "@bunker", "https://www.instagram.com/bunker?igsh=…" → "bunker" */
+export function instagramHandle(input: string | null | undefined): string | null {
+  const s = String(input ?? '').trim();
+  if (!s) return null;
+  const m = /instagram\.com\/([A-Za-z0-9._]+)/i.exec(s);
+  const h = (m ? m[1] : s.replace(/^@/, '')).replace(/\/+$/, '');
+  return /^[A-Za-z0-9._]{1,30}$/.test(h) ? h : null;
+}
+
+/** Link de Google Maps: el que cargó el negocio o, si no hay, uno armado con la dirección */
+export function mapsHref(mapsUrl: string | null | undefined, address: string | null | undefined, city: string | null | undefined): string | null {
+  if (mapsUrl && /^https?:\/\//i.test(mapsUrl)) return mapsUrl;
+  const q = [address, city].filter(Boolean).join(', ');
+  return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null;
 }
 
 export function firstName(name: string): string {

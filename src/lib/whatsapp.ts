@@ -5,7 +5,7 @@
 // todo el código pasa por acá.
 
 export interface MensajeWhatsApp {
-  /** Teléfono destino: 10 dígitos argentinos ("3625493647") o internacional ("5493625493647"). Vacío = elegir contacto. */
+  /** Teléfono destino: 10 dígitos argentinos ("3624493647") o internacional ("5493624493647"). Vacío = elegir contacto. */
   to?: string | null;
   text: string;
 }

@@ -24,7 +24,7 @@ export function authProblem(mode: AuthMode, v: AuthValues, area?: string | null)
   if (!digits) return 'Escribí tu teléfono.';
   if (!normalizePhone(v.phone, area)) {
     return digits.length < PHONE_MIN
-      ? `El teléfono es muy corto (${digits.length} números). Escribilo completo, por ejemplo 362 549-3647.`
+      ? `El teléfono es muy corto (${digits.length} números). Escribilo completo, por ejemplo 362 412-3456.`
       : `El teléfono es muy largo (${digits.length} números). Revisá que no esté repetido.`;
   }
   if (v.email.trim() && !isEmail(v.email.trim())) return 'Revisá el correo (ej: nombre@gmail.com) o dejalo vacío: es opcional.';
@@ -80,7 +80,7 @@ export function AuthFields({
         type="tel"
         inputMode="tel"
         autoComplete="tel"
-        placeholder="Teléfono (ej: 362 549-3647)"
+        placeholder="Teléfono (ej: 362 412-3456)"
         value={values.phone}
         onChange={(phone) => setValues({ ...values, phone })}
       />
