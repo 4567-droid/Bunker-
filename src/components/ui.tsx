@@ -24,8 +24,10 @@ export const ICONS = {
   chevron: 'M9 6l6 6-6 6',
   back: 'M15 6l-6 6 6 6',
   check: 'M5 12.5l4.5 4.5L19 7.5',
-  whatsapp: 'M3.5 20.5l1.3-4A8.5 8.5 0 1 1 8 19.6z',
+  whatsapp: 'M3.5 20.5l1.3-4A8.5 8.5 0 1 1 8 19.6zM9.2 8.4c-.2 1.4.5 3 1.9 4.4s3 2.1 4.4 1.9l.7-1.4-1.9-1-.9.9c-.8-.4-1.6-1.2-2-2l.9-.9-1-1.9z',
   calendar: 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4',
+  pin: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  instagram: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17.5 6.5h.01',
   close: 'M6 6l12 12M18 6L6 18',
 } as const;
 export type IconName = keyof typeof ICONS;
