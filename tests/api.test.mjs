@@ -206,6 +206,17 @@ test('barbero: empezar corte, luz roja y sellar', async () => {
   assert.match(q.data.reason, /invitar/);
   const live2 = await pub.get('/api/public/live');
   assert.equal(live2.data.barbers.find((b) => b.name === 'Mauri').state, 'free');
+
+  // Libre / Ocupado: la respuesta ya trae la agenda y la fila nuevas (un solo viaje)
+  r = await mauri.post('/api/barber/status?view=2026-11-13', { state: 'busy' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.agenda.status.state, 'busy');
+  assert.equal(r.data.agenda.day, '2026-11-13');
+  assert.ok(Array.isArray(r.data.queue.waiting));
+  assert.equal((await pub.get('/api/public/live')).data.barbers.find((b) => b.name === 'Mauri').state, 'busy');
+  r = await mauri.post('/api/barber/status', { state: 'free' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.agenda, undefined, 'sin ?view no la manda');
 });
 
 test('tarjeta llena: el 10.º corte es gratis', async () => {
@@ -275,6 +286,29 @@ test('central del dueño: ingresos, gastos y ajustes', async () => {
   assert.equal(f.data.expense, 5000);
   assert.equal(f.data.profit, 34000);
   assert.equal(f.data.booked.n, 2, 'turnos reservados que faltan (Ana 11:30 e Iván 12:00)');
+
+  // Todos los meses: octubre con un gasto (perdió), noviembre en curso
+  r = await owner.post('/api/owner/expense', { category: 'Alquiler', description: 'Alquiler octubre', amount: 80000, date: '2026-10-05' });
+  assert.equal(r.status, 200);
+  const ms = await owner.get('/api/owner/months');
+  assert.equal(ms.status, 200);
+  const [nov, oct] = ms.data.months;
+  assert.equal(nov.month, '2026-11');
+  assert.ok(nov.isCurrent);
+  assert.equal(nov.income, 39000);
+  assert.equal(nov.profit, 34000);
+  assert.equal(nov.cuts, 4);
+  assert.equal(nov.profitDiff, 34000 + 80000, 'ganaron 114.000 más que en octubre');
+  assert.equal(oct.month, '2026-10');
+  assert.equal(oct.expense, 80000);
+  assert.equal(oct.profit, -80000);
+  assert.equal(oct.profitDiff, null, 'septiembre no tuvo movimiento');
+  assert.equal(ms.data.years[0].year, '2026');
+  assert.equal(ms.data.years[0].profit, 34000 - 80000);
+  assert.equal(ms.data.best, '2026-10');
+  f = await owner.get('/api/owner/finance?month=2026-10');
+  assert.equal(f.data.expense, 80000);
+  assert.equal((await mauri.get('/api/owner/months')).status, 401, 'un barbero no ve el historial');
 
   const st = await owner.get('/api/owner/settings');
   const corte = st.data.services.find((s) => s.name === 'Corte');

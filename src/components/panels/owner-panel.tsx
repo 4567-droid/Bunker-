@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BottomNav, Chip, ErrorNote, Field, GhostButton, Kicker, LoginShell, OkNote, PrimaryButton, type NavTab } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { money } from '@/lib/format';
@@ -46,6 +46,38 @@ interface Finance {
   expenseCats: string[];
 }
 
+interface MonthItem {
+  month: string;
+  label: string;
+  isCurrent: boolean;
+  income: number;
+  serviceIncome: number;
+  otherIncome: number;
+  expense: number;
+  profit: number;
+  cuts: number;
+  avgTicket: number;
+  noShows: number;
+  newClients: number;
+  profitDiff: number | null;
+}
+interface MonthsData {
+  current: string;
+  months: MonthItem[];
+  years: { year: string; income: number; expense: number; profit: number; cuts: number; months: number }[];
+  best: string | null;
+}
+
+// Lo último que se trajo de cada pantalla: al volver se muestra al instante y se actualiza atrás
+const financeCache = new Map<string, Finance>();
+let monthsCache: MonthsData | null = null;
+let settingsCache: Settings | null = null;
+function forgetCaches() {
+  financeCache.clear();
+  monthsCache = null;
+  settingsCache = null;
+}
+
 const TABS: NavTab[] = [
   { id: 'resumen', label: 'Resumen', icon: 'resumen' },
   { id: 'ingresos', label: 'Ingresos', icon: 'ingresos' },
@@ -61,8 +93,9 @@ const HEADINGS: Record<string, string> = {
   ajustes: 'Ajustes',
   agenda: 'Turnos',
   clientes: 'Clientes',
+  meses: 'Todos los meses',
 };
-const NO_MONTH = ['ajustes', 'agenda', 'clientes'];
+const NO_MONTH = ['ajustes', 'agenda', 'clientes', 'meses'];
 const GREEN = '#4CC26A';
 const RED = '#E0533D';
 
@@ -121,12 +154,20 @@ function OwnerLogin({ brand, onDone }: { brand: string; onDone: () => void }) {
 function OwnerApp({ isOwner, onLogout }: { isOwner: boolean; onLogout: () => void }) {
   const [tab, setTab] = useState('resumen');
   const [month, setMonth] = useState<string | null>(null);
-  const [f, setF] = useState<Finance | null>(null);
+  const [f, setF] = useState<Finance | null>(() => financeCache.get('') ?? null);
   const [error, setError] = useState<string | null>(null);
+  const wanted = useRef<string | null>(null);
 
   const load = useCallback(async () => {
+    const key = month ?? '';
+    wanted.current = key;
+    const hit = financeCache.get(key);
+    setF((cur) => hit ?? (cur && (cur.month === month || !month) ? cur : null));
     try {
-      setF(await api<Finance>(`/api/owner/finance${month ? `?month=${month}` : ''}`));
+      const r = await api<Finance>(`/api/owner/finance${month ? `?month=${month}` : ''}`);
+      financeCache.set(key, r);
+      financeCache.set(r.month, r);
+      if (wanted.current === key) setF(r);
     } catch (e) {
       if ((e as Error).message.includes('ingresar')) onLogout();
       else setError((e as Error).message);
@@ -137,8 +178,14 @@ function OwnerApp({ isOwner, onLogout }: { isOwner: boolean; onLogout: () => voi
     load();
   }, [load]);
 
+  function openMonth(m: string) {
+    setMonth(m);
+    setTab('resumen');
+  }
+
   async function logout() {
     await api('/api/staff/logout', {}).catch(() => {});
+    forgetCaches();
     onLogout();
   }
 
@@ -152,7 +199,13 @@ function OwnerApp({ isOwner, onLogout }: { isOwner: boolean; onLogout: () => voi
                 ‹
               </button>
             )}
-            Central{f ? ` · ${f.monthLabel}` : ''}
+            {f && !NO_MONTH.includes(tab) ? (
+              <button type="button" onClick={() => setTab('meses')} className="min-h-9 tracking-[.18em] text-muted uppercase underline decoration-line-2 underline-offset-4">
+                Central · {f.monthLabel}
+              </button>
+            ) : (
+              'Central'
+            )}
             {f && !NO_MONTH.includes(tab) && !f.isCurrent && (
               <button type="button" aria-label="Mes siguiente" onClick={() => setMonth(shiftMonth(f.month, 1))} className="min-h-9 px-2 text-muted">
                 ›
@@ -169,6 +222,7 @@ function OwnerApp({ isOwner, onLogout }: { isOwner: boolean; onLogout: () => voi
         <ErrorNote text={error} />
         {!f && !NO_MONTH.includes(tab) && <span className="text-muted">Cargando…</span>}
         {f && tab === 'resumen' && <Resumen f={f} go={setTab} />}
+        {tab === 'meses' && <AllMonths onPick={openMonth} />}
         {f && tab === 'ingresos' && <Ingresos f={f} reload={load} />}
         {f && tab === 'gastos' && <Gastos f={f} reload={load} />}
         {f && tab === 'estimado' && <Estimado f={f} reload={load} />}
@@ -251,6 +305,14 @@ function Resumen({ f, go }: { f: Finance; go: (t: string) => void }) {
         </span>
         <span className="text-sm text-accent">Ver →</span>
       </button>
+      <button type="button" onClick={() => go('meses')} className="flex items-center justify-between gap-3 rounded-[20px] border border-line bg-card px-[18px] py-4 text-left text-ink">
+        <span className="flex flex-col">
+          <span className="text-[13px] font-light text-muted">Historial</span>
+          <span className="text-lg font-semibold">Todos los meses</span>
+          <span className="text-[13px] font-light text-muted">Cómo les fue cada mes: ganancia, ingresos, gastos y cortes</span>
+        </span>
+        <span className="shrink-0 text-sm text-accent">Ver →</span>
+      </button>
       <div className="grid grid-cols-2 gap-2.5">
         <button type="button" onClick={() => go('ingresos')} className="min-h-[52px] rounded-full border border-line-2 bg-card text-[15px] font-medium text-ink">
           + Ingreso
@@ -279,6 +341,191 @@ function Resumen({ f, go }: { f: Finance; go: (t: string) => void }) {
         ))}
       </div>
     </>
+  );
+}
+
+const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+function Change({ diff, prevLabel }: { diff: number | null; prevLabel: string | null }) {
+  if (diff === null || !prevLabel) return null;
+  const month = prevLabel.split(' ')[0];
+  if (diff === 0) return <span className="text-[13px] font-light text-muted">Igual que en {month}</span>;
+  const up = diff > 0;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[13px] font-light text-muted">
+      <span aria-hidden className="text-[10px]" style={{ color: up ? GREEN : RED }}>
+        {up ? '▲' : '▼'}
+      </span>
+      {money(Math.abs(diff))} {up ? 'más' : 'menos'} que en {month}
+    </span>
+  );
+}
+
+/** Ganancia de los últimos 12 meses: una barra por mes (amarilla si ganaron, roja hacia abajo si perdieron) */
+function ProfitChart({ months, onPick }: { months: MonthItem[]; onPick: (m: string) => void }) {
+  const [sel, setSel] = useState<string>(months[months.length - 1]?.month ?? '');
+  const top = Math.max(0, ...months.map((m) => m.profit));
+  const bottom = Math.max(0, ...months.map((m) => -m.profit));
+  const span = top + bottom || 1;
+  const H = 132;
+  const upH = Math.round((H * top) / span);
+  const downH = H - upH;
+  const s = months.find((m) => m.month === sel) ?? months[months.length - 1];
+  if (!s) return null;
+  return (
+    <section className="flex flex-col gap-3 rounded-3xl border border-line bg-card p-[18px]">
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex flex-col">
+          <span className="text-[13px] font-light text-muted">Ganancia · {cap(s.label)}{s.isCurrent ? ' (en curso)' : ''}</span>
+          <span className="text-[26px] leading-tight font-semibold" style={{ color: s.profit < 0 ? RED : undefined }}>
+            {s.profit < 0 ? `−${money(-s.profit)}` : money(s.profit)}
+          </span>
+          <span className="text-[13px] font-light text-muted">
+            Ingresos {money(s.income)} · Gastos {money(s.expense)}
+          </span>
+        </span>
+        <button type="button" onClick={() => onPick(s.month)} className="min-h-11 shrink-0 rounded-full border border-line-2 px-4 text-sm text-accent">
+          Ver mes →
+        </button>
+      </div>
+      <div className="flex items-stretch gap-[2px]" role="group" aria-label="Ganancia de cada mes">
+        {months.map((m) => {
+          const on = m.month === s.month;
+          const h = Math.max(m.profit === 0 ? 0 : 3, Math.round((H * Math.abs(m.profit)) / span));
+          return (
+            <button
+              key={m.month}
+              type="button"
+              aria-label={`${cap(m.label)}: ganancia ${money(m.profit)}`}
+              aria-pressed={on}
+              onClick={() => (on ? onPick(m.month) : setSel(m.month))}
+              // Con mouse, pasar por encima ya la elige; en el celular el primer toque elige y el segundo abre
+              onPointerEnter={(e) => e.pointerType === 'mouse' && setSel(m.month)}
+              onFocus={(e) => e.currentTarget.matches(':focus-visible') && setSel(m.month)}
+              className="flex min-w-0 flex-1 flex-col items-center rounded-lg pt-1"
+              style={{ background: on ? '#232320' : 'transparent' }}
+            >
+              <span className="flex w-full items-end justify-center" style={{ height: upH }}>
+                {m.profit > 0 && (
+                  <span className="block w-full max-w-[24px] rounded-t-[4px]" style={{ height: h, background: '#F5C400', opacity: on ? 1 : 0.55 }} />
+                )}
+              </span>
+              <span className="block h-px w-full bg-line-2" />
+              <span className="flex w-full items-start justify-center" style={{ height: downH }}>
+                {m.profit < 0 && (
+                  <span className="block w-full max-w-[24px] rounded-b-[4px]" style={{ height: h, background: RED, opacity: on ? 1 : 0.55 }} />
+                )}
+              </span>
+              <span className={`pt-1.5 pb-1 text-[11px] ${on ? 'text-ink' : 'text-dim'}`}>{SHORT_MONTHS[Number(m.month.slice(5, 7)) - 1]}</span>
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-xs font-light text-dim">Tocá una barra para ver ese mes. Tocala de nuevo para abrirlo.</span>
+    </section>
+  );
+}
+
+function AllMonths({ onPick }: { onPick: (m: string) => void }) {
+  const [d, setD] = useState<MonthsData | null>(monthsCache);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api<MonthsData>('/api/owner/months')
+      .then((r) => {
+        monthsCache = r;
+        setD(r);
+      })
+      .catch((e) => setError((e as Error).message));
+  }, []);
+  if (!d) return error ? <ErrorNote text={error} /> : <span className="text-muted">Cargando…</span>;
+  const chart = d.months.slice(0, 12).reverse();
+  return (
+    <div className="flex flex-col gap-3">
+      <ErrorNote text={error} />
+      <ProfitChart months={chart} onPick={onPick} />
+
+      {d.years.map((y) => (
+        <section key={y.year} className="flex flex-col gap-2 rounded-[20px] border border-accent px-[18px] py-4">
+          <span className="flex items-baseline justify-between gap-3">
+            <span className="text-lg font-semibold">Año {y.year}</span>
+            <span className="text-[13px] font-light text-muted">
+              {plural(y.months, 'mes', 'meses')} · {plural(y.cuts, 'corte', 'cortes')}
+            </span>
+          </span>
+          <span className="text-[30px] leading-tight font-bold" style={{ color: y.profit < 0 ? RED : '#F5C400' }}>
+            {y.profit < 0 ? `−${money(-y.profit)}` : money(y.profit)}
+          </span>
+          <span className="-mt-1 text-[13px] font-light text-muted">Ganancia del año{y.year === d.current.slice(0, 4) ? ' hasta hoy' : ''}</span>
+          <div className="grid grid-cols-2 gap-2">
+            <YearStat label="Ingresos" value={y.income} color={GREEN} />
+            <YearStat label="Gastos" value={y.expense} color={RED} />
+          </div>
+        </section>
+      ))}
+
+      <Kicker className="px-1 pt-1.5">Mes por mes</Kicker>
+      {d.months.map((m, i) => {
+        const prev = d.months[i + 1] ?? null;
+        const empty = m.income === 0 && m.expense === 0;
+        return (
+          <button
+            key={m.month}
+            type="button"
+            onClick={() => onPick(m.month)}
+            className="flex flex-col gap-2 rounded-[20px] border border-line bg-card px-[18px] py-4 text-left text-ink"
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-[17px] font-semibold">
+                {cap(m.label)}
+                {m.isCurrent && <span className="rounded-full border border-line-2 px-2.5 py-0.5 text-xs font-normal text-muted">En curso</span>}
+                {d.best === m.month && <span className="rounded-full bg-[#26230F] px-2.5 py-0.5 text-xs font-medium text-accent">Mejor mes</span>}
+              </span>
+              <span className="text-sm text-accent">Ver →</span>
+            </span>
+            {empty ? (
+              <span className="text-sm font-light text-muted">Sin movimientos cargados.</span>
+            ) : (
+              <>
+                <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span className="text-[24px] leading-tight font-bold" style={{ color: m.profit < 0 ? RED : '#F5C400' }}>
+                    {m.profit < 0 ? `Perdieron ${money(-m.profit)}` : money(m.profit)}
+                  </span>
+                  <Change diff={m.profitDiff} prevLabel={prev?.label ?? null} />
+                </span>
+                <span className="grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] font-light text-muted">
+                  <span>
+                    Ingresos <span className="font-medium" style={{ color: GREEN }}>{money(m.income)}</span>
+                  </span>
+                  <span>
+                    Gastos <span className="font-medium" style={{ color: RED }}>{money(m.expense)}</span>
+                  </span>
+                  <span>{plural(m.cuts, 'corte', 'cortes')}{m.avgTicket ? ` · ${money(m.avgTicket)} c/u` : ''}</span>
+                  <span>
+                    {plural(m.newClients, 'cliente nuevo', 'clientes nuevos')}
+                    {m.noShows ? ` · ${plural(m.noShows, 'no vino', 'no vinieron')}` : ''}
+                  </span>
+                </span>
+              </>
+            )}
+          </button>
+        );
+      })}
+      <span className="px-1 text-xs font-light text-dim">
+        La ganancia es lo cobrado en cortes terminados más los otros ingresos, menos los gastos cargados ese mes.
+      </span>
+    </div>
+  );
+}
+
+function YearStat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <span className="flex min-w-0 flex-col rounded-2xl bg-field px-3 py-2.5">
+      <span className="text-xs font-light text-muted">{label}</span>
+      <span className="truncate text-[15px] font-semibold" style={{ color }}>
+        {money(value)}
+      </span>
+    </span>
   );
 }
 
@@ -543,15 +790,18 @@ function Small({ label, value, onChange, type = 'text', width = 'flex-1', placeh
 }
 
 function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promise<void> }) {
-  const [s, setS] = useState<Settings | null>(null);
-  const [biz, setBiz] = useState<Settings['business'] | null>(null);
+  const [s, setS] = useState<Settings | null>(settingsCache);
+  const [biz, setBiz] = useState<Settings['business'] | null>(settingsCache?.business ?? null);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const edited = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     const r = await api<Settings>('/api/owner/settings');
+    settingsCache = r;
     setS(r);
-    setBiz(r.business);
+    // Si ya empezó a escribir en los datos del negocio, no se le pisa lo que escribió
+    if (force || !edited.current) setBiz(r.business);
   }, []);
   useEffect(() => {
     load().catch((e) => setError((e as Error).message));
@@ -563,8 +813,8 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
     try {
       await api(path, body);
       setMsg(ok);
-      await load();
-      await onSaved();
+      edited.current = false;
+      await Promise.all([load(true), onSaved()]);
       return true;
     } catch (e) {
       setError((e as Error).message);
@@ -573,7 +823,10 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
   }
 
   if (!s || !biz) return error ? <ErrorNote text={error} /> : <span className="text-muted">Cargando…</span>;
-  const set = (patch: Partial<Settings['business']>) => setBiz({ ...biz, ...patch });
+  const set = (patch: Partial<Settings['business']>) => {
+    edited.current = true;
+    setBiz({ ...biz, ...patch });
+  };
   const order = [1, 2, 3, 4, 5, 6, 0];
 
   return (
