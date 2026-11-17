@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Cormorant_Garamond, Jost } from 'next/font/google';
 import { headers } from 'next/headers';
 import type { CSSProperties, ReactNode } from 'react';
-import { asTheme, currentBusiness } from '@/lib/business';
+import { asTheme, currentBusiness, THEME_BAR } from '@/lib/business';
 import './globals.css';
 
 const jost = Jost({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700'], variable: '--font-jost', display: 'swap' });
@@ -36,7 +36,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     applicationName: name,
     icons: { icon: own ? '/brand/favicon-32.png' : icon, apple: own ? '/brand/apple-icon.png' : appleIcon },
-    appleWebApp: { capable: true, title: name.split(/\s+/)[0], statusBarStyle: 'black-translucent' },
+    appleWebApp: { capable: true, title: name.split(/\s+/)[0], statusBarStyle: asTheme(biz?.theme) === 'claro' ? 'default' : 'black-translucent' },
     openGraph: {
       type: 'website',
       locale: 'es_AR',
@@ -49,12 +49,16 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export const viewport: Viewport = {
-  themeColor: '#121211',
-  width: 'device-width',
-  initialScale: 1,
-  viewportFit: 'cover',
-};
+export async function generateViewport(): Promise<Viewport> {
+  const theme = asTheme((await safeBusiness())?.theme);
+  return {
+    themeColor: THEME_BAR[theme],
+    colorScheme: theme === 'claro' ? 'light' : 'dark',
+    width: 'device-width',
+    initialScale: 1,
+    viewportFit: 'cover',
+  };
+}
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const biz = await safeBusiness();

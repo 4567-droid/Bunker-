@@ -308,9 +308,9 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
               const on = r.id === sel;
               const st =
                 r.status === 'completed'
-                  ? { t: r.source === 'fila' ? 'Sin turno · atendido' : 'Atendido', dot: '#6E6B63', c: 'text-dim' }
+                  ? { t: r.source === 'fila' ? 'Sin turno · atendido' : 'Atendido', dot: 'var(--color-faint)', c: 'text-dim' }
                   : r.status === 'no_show'
-                    ? { t: 'No vino', dot: '#6E6B63', c: 'text-dim' }
+                    ? { t: 'No vino', dot: 'var(--color-faint)', c: 'text-dim' }
                   : r.status === 'in_progress'
                     ? { t: 'Cortando', dot: RED, c: 'text-ink' }
                     : r.confirmed
@@ -451,7 +451,7 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
           <>
             <section
               className="flex flex-col items-center gap-2.5 rounded-3xl border bg-card px-5 py-7 text-center"
-              style={{ borderColor: state === 'free' ? GREEN : state === 'cutting' ? RED : '#2A2A27' }}
+              style={{ borderColor: state === 'free' ? GREEN : state === 'cutting' ? RED : 'var(--color-line)' }}
             >
               <span className="h-[22px] w-[22px] rounded-full" style={{ background: stDot, boxShadow: `0 0 18px ${stDot}` }} />
               <span className="text-[26px] font-semibold">
@@ -472,8 +472,8 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
                       onClick={() => setStatus(s)}
                       className="flex min-h-16 items-center justify-center gap-2.5 rounded-[18px] border-[1.5px] text-base font-medium text-ink"
                       style={{
-                        borderColor: state === s ? (s === 'free' ? GREEN : RED) : '#2A2A27',
-                        background: state === s ? (s === 'free' ? '#132416' : '#2A1512') : '#1A1A18',
+                        borderColor: state === s ? (s === 'free' ? GREEN : RED) : 'var(--color-line)',
+                        background: state === s ? `color-mix(in srgb, ${s === 'free' ? GREEN : RED} 13%, var(--color-card))` : 'var(--color-card)',
                       }}
                     >
                       <Dot color={s === 'free' ? GREEN : RED} size={10} glow={false} />

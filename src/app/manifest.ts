@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { currentBusiness, type Business } from '@/lib/business';
+import { asTheme, currentBusiness, THEME_BAR, type Business } from '@/lib/business';
 
 // "Agregar a la pantalla de inicio": la web se abre como una app, sin barra del navegador.
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
@@ -32,8 +32,8 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#0E0E0D',
-    theme_color: '#121211',
+    background_color: asTheme(biz?.theme) === 'claro' ? '#F3F4F6' : '#0E0E0D',
+    theme_color: THEME_BAR[asTheme(biz?.theme)],
     icons,
   };
 }

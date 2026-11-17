@@ -248,19 +248,28 @@ Varios negocios y negocio de muestra (migración `006_negocio_demo.sql`):
   copiar la configuración de Bunker y arma los turnos desde hoy; conserva nombre, logo, WhatsApp y dirección web). Local: `node scripts/db.mjs demo [--reset]`.
 - La muestra nunca es el negocio por defecto: sin dominio ni `?negocio=`, se muestra Bunker.
 
-Estilos de web por negocio (migraciones `008_estilo_natural.sql` y `009_estilo_moderno.sql`, columna `businesses.theme`):
+Estilos de web por negocio (migraciones `008_estilo_natural.sql`, `009_estilo_moderno.sql` y `011_estilo_app.sql`,
+columna `businesses.theme`):
 
 - `moderno` (**Bunker hoy**, desde el 17/11/2026): el armado centrado con los colores del negocio (negro y amarillo):
   su logo arriba, título con serifa "Tu estilo, nuestra pasión.", línea amarilla, barra de reserva redonda con el botón
   "Reservar" amarillo, servicios en pastillas, el sillón dibujado y un brillo amarillo suave.
 - `clasico` (el primer diseño de Bunker): Jost, portada con el título a la izquierda (`home-classic.tsx`).
-- `natural` (la muestra, inspirada en la estética de Bosco Barber Shop, sin usar su nombre, logo ni fotos):
+- `natural` (inspirado en la estética de Bosco Barber Shop, sin usar su nombre, logo ni fotos):
   el mismo armado centrado en verde oscuro y dorado, con hojas.
+- `claro` (en /admin se llama **"App"**; **la muestra hoy**, desde el 17/11/2026, en verde menta `#10A383`): armado de
+  aplicación del celular (`home-app.tsx`). Fondo gris muy claro, tarjetas blancas sin borde con sombra suave, bloque
+  gris carbón arriba con el saludo y una tarjeta grande en degradé (próximo turno, la reserva empezada o "Turnos desde
+  $X"), accesos rápidos con íconos, filas con cuadraditos de ícono (barberos, servicios, "Dónde estamos") y la tarjeta
+  de fidelidad con barra de avance. Todo en `globals.css` (`html[data-theme='claro']`): el `bg-accent` pasa a degradé
+  y el `text-accent` se oscurece un poco para leerse sobre blanco; los paneles y la Central también quedan claros.
+  Los colores fijos de los paneles usan las variables (`var(--color-card)`, etc.) para servir en los dos modos.
 - `moderno` y `natural` comparten `home-centered.tsx` (variante por estilo) y, en la PC, el menú con links a la
   izquierda, la marca con serifa (Cormorant Garamond) en el medio y "Mi cuenta" + "Sacar turno" a la derecha.
 - Los colores de base de cada estilo están en `globals.css` (`html[data-theme='natural']`), así la web, los paneles
   y la Central quedan con la misma marca. Las tarjetas del Inicio son las mismas para los dos (`home-cards.tsx`).
-- El administrador elige el estilo al crear o editar un negocio (con su color sugerido).
+- El administrador elige el estilo al crear o editar un negocio (con su color sugerido). La barra del navegador del
+  celular toma el color de cada estilo (`THEME_BAR` en `business.ts`).
 
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

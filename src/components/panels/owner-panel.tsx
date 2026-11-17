@@ -413,7 +413,7 @@ function ProfitChart({ months, onPick }: { months: MonthItem[]; onPick: (m: stri
               onPointerEnter={(e) => e.pointerType === 'mouse' && setSel(m.month)}
               onFocus={(e) => e.currentTarget.matches(':focus-visible') && setSel(m.month)}
               className="flex min-w-0 flex-1 flex-col items-center rounded-lg pt-1"
-              style={{ background: on ? '#232320' : 'transparent' }}
+              style={{ background: on ? 'var(--color-field)' : 'transparent' }}
             >
               <span className="flex w-full items-end justify-center" style={{ height: upH }}>
                 {m.profit > 0 && (
@@ -607,7 +607,7 @@ function Ingresos({ f, reload }: { f: Finance; reload: () => Promise<void> }) {
             <span className="text-xl font-semibold">{money(b.total)}</span>
           </div>
           <div className="h-1.5 rounded-[3px] bg-field">
-            <div className="h-1.5 rounded-[3px]" style={{ width: `${Math.round((b.total / max) * 100)}%`, background: i % 2 ? '#EDEAE2' : 'var(--accent)' }} />
+            <div className="h-1.5 rounded-[3px]" style={{ width: `${Math.round((b.total / max) * 100)}%`, background: i % 2 ? 'var(--color-ink)' : 'var(--accent)' }} />
           </div>
           <div className="grid grid-cols-3 gap-2">
             {b.parts.map((p) => (
@@ -850,7 +850,7 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
         <Small label="Dirección" value={biz.address ?? ''} onChange={(v) => set({ address: v })} placeholder="Ej: Av. Sarmiento 1234" />
         <Small label="Ciudad" value={biz.city ?? ''} onChange={(v) => set({ city: v })} />
         <Small label="WhatsApp de la barbería" value={biz.whatsapp ?? ''} onChange={(v) => set({ whatsapp: v })} placeholder="Ej: 362 412-3456" />
-        <Small label="Instagram (usuario o link del perfil)" value={biz.instagram ?? ''} onChange={(v) => set({ instagram: v })} placeholder="bunkerbarberclub" />
+        <Small label="Instagram (usuario o link del perfil)" value={biz.instagram ?? ''} onChange={(v) => set({ instagram: v })} placeholder="Ej: tubarberia" />
         <Small label="Link de Google Maps (opcional: si lo dejás vacío se arma con la dirección)" value={biz.mapsUrl ?? ''} onChange={(v) => set({ mapsUrl: v })} placeholder="https://maps.app.goo.gl/..." />
         <Small label="Alias para transferencias" value={biz.transferAlias ?? ''} onChange={(v) => set({ transferAlias: v })} />
         <Small label="Link de pago de Mercado Pago" value={biz.mpLink ?? ''} onChange={(v) => set({ mpLink: v })} placeholder="https://link.mercadopago.com.ar/..." />

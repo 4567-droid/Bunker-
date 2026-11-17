@@ -48,6 +48,57 @@ html[data-theme='natural'] {
   --color-pick: color-mix(in srgb, var(--accent) 12%, #111A10);
 }
 
+/* Estilo "claro" (en /admin, "App"): como una aplicación. Fondo gris muy claro, tarjetas blancas con sombra
+   suave, textos gris carbón y el color del negocio en degradé (la muestra: verde menta). */
+html[data-theme='claro'] {
+  --color-bg: #F3F4F6;
+  --color-hero: #FFFFFF;
+  --color-card: #FFFFFF;
+  --color-line: #E7E9ED;
+  --color-line-2: #DADDE3;
+  --color-field: #F2F4F7;
+  --color-ink: #1E2128;
+  --color-soft: #3D424B;
+  --color-muted: #6B7280;
+  --color-dim: #848A94;
+  --color-faint: #A3A8B0;
+  --color-off: #C2C6CD;
+  --color-dash: #CDD1D7;
+  --color-pick: color-mix(in srgb, var(--accent) 9%, #FFFFFF);
+  --color-ok: #1F9D55;
+  --color-bad: #D9452F;
+  --app-shadow: 0 1px 2px rgb(16 24 40 / 4%), 0 8px 24px rgb(16 24 40 / 6%);
+  color-scheme: light;
+}
+html[data-theme='claro'] input,
+html[data-theme='claro'] select,
+html[data-theme='claro'] textarea {
+  color-scheme: light;
+}
+html[data-theme='claro'] input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+/* Botones y opciones elegidas: degradé del color del negocio (más claro a la izquierda) */
+html[data-theme='claro'] .bg-accent {
+  background-image: linear-gradient(110deg, color-mix(in srgb, var(--accent) 78%, #FFFFFF), color-mix(in srgb, var(--accent) 88%, #000000));
+}
+/* Textos en el color del negocio, un poco más oscuros para que se lean sobre blanco */
+html[data-theme='claro'] .text-accent {
+  color: color-mix(in srgb, var(--accent) 80%, #000000);
+}
+/* Tarjetas blancas sin borde y con sombra suave */
+html[data-theme='claro'] .bg-card {
+  box-shadow: var(--app-shadow);
+}
+html[data-theme='claro'] .bg-card.border-line {
+  border-color: transparent;
+}
+/* Menú de abajo: blanco, flotando sobre el fondo */
+html[data-theme='claro'] [data-nav='bottom'] {
+  border-color: transparent;
+  box-shadow: 0 -6px 24px rgb(16 24 40 / 7%);
+}
+
 /* Estilos "natural" y "moderno": títulos con serifa (el "moderno" mantiene los colores del negocio) */
 html[data-theme='natural'] h1,
 html[data-theme='moderno'] h1,

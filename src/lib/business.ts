@@ -43,10 +43,14 @@ export interface Business {
  * Estilos de la web:
  *  - clasico: portada con el título a la izquierda (el primero de Bunker)
  *  - moderno: título centrado con serifa y barra de reserva redonda, con los colores del negocio (Bunker hoy)
- *  - natural: el armado moderno en verde oscuro y dorado, con hojas (la muestra)
+ *  - natural: el armado moderno en verde oscuro y dorado, con hojas
+ *  - claro (en /admin, "App"): fondo claro, tarjetas blancas, bloque gris carbón arriba y degradé del color
+ *    del negocio, como una aplicación (la muestra, en verde menta)
  */
-export type Theme = 'clasico' | 'moderno' | 'natural';
-export const THEMES: Theme[] = ['clasico', 'moderno', 'natural'];
+export type Theme = 'clasico' | 'moderno' | 'natural' | 'claro';
+export const THEMES: Theme[] = ['clasico', 'moderno', 'natural', 'claro'];
+/** Color de la barra del navegador en el celular, según el estilo */
+export const THEME_BAR: Record<Theme, string> = { clasico: '#121211', moderno: '#121211', natural: '#111A10', claro: '#F3F4F6' };
 export const asTheme = (v: unknown): Theme => (THEMES.includes(v as Theme) ? (v as Theme) : 'clasico');
 
 export const BIZ_COOKIE = 'bk_biz';

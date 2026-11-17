@@ -146,7 +146,7 @@ export default function Cuenta() {
         </div>
         <AuthFields mode={mode} setMode={setMode} values={form} setValues={setForm} idPrefix="c" area={area} />
         <ErrorNote text={error} />
-        <PrimaryButton onClick={submit} busy={busy} className={problem ? '!bg-line !text-dim' : ''}>
+        <PrimaryButton onClick={submit} busy={busy} dimmed={!!problem}>
           {mode === 'register' ? 'Crear cuenta' : 'Ingresar'}
         </PrimaryButton>
       </div>

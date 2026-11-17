@@ -774,6 +774,8 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   assert.equal(r.status, 200, JSON.stringify(r.data));
   const cfgFilo2 = await agent({ 'x-bk-biz': 'filo' }).get('/api/public/config');
   assert.equal(cfgFilo2.data.business.theme, 'natural');
+  r = await admin.post('/api/admin/business/update', { id: filo.id, name: filo.name, theme: 'claro', accent: '#10A383' });
+  assert.equal((await agent({ 'x-bk-biz': 'filo' }).get('/api/public/config')).data.business.theme, 'claro');
   r = await admin.post('/api/admin/business/update', { id: filo.id, name: filo.name, theme: 'cualquiera' });
   assert.equal((await agent({ 'x-bk-biz': 'filo' }).get('/api/public/config')).data.business.theme, 'clasico', 'un estilo que no existe vuelve a clásico');
 
@@ -788,8 +790,8 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   const cfgBunker = await pub.get('/api/public/config');
   assert.equal(cfg.data.business.name, 'Navaja Barber Club');
   // Hace lo mismo que Bunker (servicios, precios y tarjeta; 3 barberos) con otro nombre y su propio estilo
-  assert.equal(cfg.data.business.theme, 'natural');
-  assert.equal(cfg.data.business.accent, '#C9A66B');
+  assert.equal(cfg.data.business.theme, 'claro', 'la muestra usa el estilo "App" (claro, verde menta)');
+  assert.equal(cfg.data.business.accent, '#10A383');
   assert.equal(cfgBunker.data.business.theme, 'moderno', 'Bunker usa el armado nuevo con sus colores');
   assert.equal(cfgBunker.data.business.accent, '#F5C400');
   assert.deepEqual(

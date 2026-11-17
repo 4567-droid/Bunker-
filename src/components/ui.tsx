@@ -203,6 +203,7 @@ export function PrimaryButton({
   className = '',
   type = 'button',
   busy,
+  dimmed,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -210,6 +211,8 @@ export function PrimaryButton({
   className?: string;
   type?: 'button' | 'submit';
   busy?: boolean;
+  /** Se ve gris pero se puede tocar (para mostrar qué falta completar) */
+  dimmed?: boolean;
 }) {
   const off = disabled || busy;
   return (
@@ -217,7 +220,7 @@ export function PrimaryButton({
       type={type}
       onClick={onClick}
       disabled={off}
-      className={`min-h-14 rounded-full border-0 px-5 text-[17px] font-semibold transition-colors ${off ? 'bg-line text-dim' : 'bg-accent text-bg'} ${className}`}
+      className={`min-h-14 rounded-full border-0 px-5 text-[17px] font-semibold transition-colors ${off || dimmed ? 'bg-line text-dim' : 'bg-accent text-bg'} ${className}`}
     >
       {busy ? 'Un momento…' : children}
     </button>
@@ -383,7 +386,7 @@ export function BottomNav({
   className?: string;
 }) {
   return (
-    <nav aria-label="Menú" className={`sticky bottom-0 z-10 border-t border-field bg-hero pb-[env(safe-area-inset-bottom)] ${className}`}>
+    <nav aria-label="Menú" data-nav="bottom" className={`sticky bottom-0 z-10 border-t border-field bg-hero pb-[env(safe-area-inset-bottom)] ${className}`}>
       <div className="mx-auto grid" style={{ maxWidth, gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
         {tabs.map((t) => {
           const on = t.id === active;

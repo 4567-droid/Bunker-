@@ -380,9 +380,10 @@ function BusinessDetail({ b, save }: { b: Biz; save: (p: string, body: Record<st
 
 // Estilos de la web que puede elegir cada negocio (con su color sugerido)
 const THEME_OPTIONS = [
-  { id: 'moderno', label: 'Moderno', desc: 'Título centrado y barra de reserva, con el color del negocio (Bunker)', color: '#F5C400' },
-  { id: 'clasico', label: 'Clásico', desc: 'Título a la izquierda y tarjeta de reserva (el primero)', color: '#F5C400' },
-  { id: 'natural', label: 'Natural', desc: 'Verde oscuro, dorado y hojas (la muestra)', color: '#C9A66B' },
+  { id: 'moderno', label: 'Moderno', desc: 'Título centrado y barra de reserva, con el color del negocio (Bunker)', color: '#F5C400', base: '#1A1A18' },
+  { id: 'clasico', label: 'Clásico', desc: 'Título a la izquierda y tarjeta de reserva (el primero)', color: '#F5C400', base: '#1A1A18' },
+  { id: 'natural', label: 'Natural', desc: 'Verde oscuro, dorado y hojas', color: '#C9A66B', base: '#1C2819' },
+  { id: 'claro', label: 'App', desc: 'Claro, tarjetas blancas y degradé, como una app (la muestra)', color: '#10A383', base: '#F3F4F6' },
 ];
 
 /** Elegir el estilo de la web. Si el color era el sugerido del estilo anterior, cambia al del nuevo. */
@@ -391,7 +392,7 @@ function ThemePicker({ value, accent, onChange }: { value: string; accent: strin
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[13px] text-muted">Estilo de la web</span>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         {THEME_OPTIONS.map((t) => {
           const on = t.id === cur.id;
           return (
@@ -402,7 +403,7 @@ function ThemePicker({ value, accent, onChange }: { value: string; accent: strin
               onClick={() => onChange(t.id, accent.toUpperCase() === cur.color.toUpperCase() ? t.color : accent)}
               className={`flex items-center gap-3 rounded-2xl border-[1.5px] px-4 py-3 text-left text-ink ${on ? 'border-accent bg-pick' : 'border-line bg-card'}`}
             >
-              <span className="h-8 w-8 shrink-0 rounded-full border border-line-2" style={{ background: t.id === 'natural' ? `linear-gradient(135deg, #1C2819 55%, ${t.color} 55%)` : `linear-gradient(135deg, #1A1A18 55%, ${t.color} 55%)` }} />
+              <span className="h-8 w-8 shrink-0 rounded-full border border-line-2" style={{ background: `linear-gradient(135deg, ${t.base} 55%, ${t.color} 55%)` }} />
               <span className="flex flex-col">
                 <span className="text-[15px] font-medium">{t.label}</span>
                 <span className="text-xs font-light text-muted">{t.desc}</span>
