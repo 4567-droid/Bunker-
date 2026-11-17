@@ -65,21 +65,21 @@ export async function findReferrer(tx: Tx, bizId: string, code: string): Promise
 }
 
 export const BAD_CODE = 'Ese código de invitación no existe. Revisalo (son letras y números, ej: ANA7KQ) o dejalo vacío.';
-export const NOT_NEW = 'El descuento de invitación es solo para quien nunca se cortó en Bunker.';
+export const notNew = (bizName: string) => `El descuento de invitación es solo para quien nunca se cortó en ${bizName}.`;
 
 /** Por qué este cliente ya no puede usar un código de invitación (null = puede) */
 export async function inviteBlock(
   tx: Tx,
-  biz: { id: string; referral_percent: number },
+  biz: { id: string; name: string; referral_percent: number },
   c: { id: string; phone: string | null; visits: number; referred_by: string | null },
 ): Promise<string | null> {
   if (biz.referral_percent <= 0) return 'Ahora no hay descuento por invitación.';
   if (c.referred_by) return 'Ya usaste un código de invitación.';
   const [w] = await tx`select 1 from rewards where client_id = ${c.id} and kind = 'welcome'`;
   if (w) return 'Ya usaste un código de invitación.';
-  if (c.visits > 0) return NOT_NEW;
+  if (c.visits > 0) return notNew(biz.name);
   const [done] = await tx`select 1 from appointments where client_id = ${c.id} and status = 'completed' limit 1`;
-  if (done) return NOT_NEW;
-  if (await wasClientBefore(tx, biz.id, c.phone)) return NOT_NEW;
+  if (done) return notNew(biz.name);
+  if (await wasClientBefore(tx, biz.id, c.phone)) return notNew(biz.name);
   return null;
 }

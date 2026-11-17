@@ -76,8 +76,8 @@ export const currentBusiness = cache(async (): Promise<Business> => {
     from businesses b
     where (${host} <> '' and b.domain in (${host}, ${'www.' + host}))
        or b.slug in (${override}, ${def})
-       or b.id = (select id from businesses order by created_at limit 1)
-    order by pick, b.created_at
+       or b.id = (select id from businesses order by (status = 'demo'), created_at limit 1)
+    order by pick, (b.status = 'demo'), b.created_at
     limit 1`;
   if (!rows[0]) fail(503, 'Todavía no hay ningún negocio cargado. En tu PC: `npm run db:seed`. En Vercel: Redeploy.');
   const { pick: _pick, ...biz } = rows[0];

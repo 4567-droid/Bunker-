@@ -1,4 +1,4 @@
-import { BAD_CODE, findReferrer, inviteBlock, newReferralCode, normalizeCode, NOT_NEW, rememberFormerClient, wasClientBefore } from '@/lib/clients';
+import { BAD_CODE, findReferrer, inviteBlock, newReferralCode, normalizeCode, notNew, rememberFormerClient, wasClientBefore } from '@/lib/clients';
 import { clientIp, endSession, endSessionsFor, guardAttempts, recordFailure, startSession } from '@/lib/auth';
 import {
   apptDto,
@@ -276,7 +276,7 @@ export const POST = route(async (req, [action]) => {
           // Un código mal escrito no se ignora en silencio: se avisa para que lo corrija o lo borre
           const r = await findReferrer(tx, biz.id, ref);
           if (!r) fail(400, BAD_CODE, 'bad_ref');
-          if (await wasClientBefore(tx, biz.id, phone)) fail(409, `${NOT_NEW} Borrá el código para seguir.`, 'ref_not_new');
+          if (await wasClientBefore(tx, biz.id, phone)) fail(409, `${notNew(biz.name)} Borrá el código para seguir.`, 'ref_not_new');
           referredBy = r.id;
         }
         const code = await newReferralCode(tx, biz.id, name);

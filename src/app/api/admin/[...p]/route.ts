@@ -17,6 +17,12 @@ const DEFAULT_HOURS = {
   6: [['09:00', '13:00']],
 };
 
+const DEFAULT_SERVICES = [
+  { name: 'Corte', duration: 30, price: 15000 },
+  { name: 'Corte + barba', duration: 50, price: 18000 },
+  { name: 'Barba sola', duration: 20, price: 10000 },
+];
+
 function cleanDomain(v: string): string | null {
   const d = v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
   if (!d) return null;
@@ -89,6 +95,13 @@ export const POST = route(async (req, path) => {
         returning id`;
       await tx`insert into staff (business_id, role, name, username, password_hash)
                values (${b.id}, 'owner', ${str(body, 'ownerName', { optional: true, max: 60 }) || 'Dueño'}, ${ownerUser}, ${hash})`;
+      // Arranca con servicios de ejemplo para que la web ya funcione; el dueño los cambia en Ajustes
+      const kind = str(body, 'kind', { optional: true, max: 40 }) || 'Barbería';
+      const services = /barber/i.test(kind) ? DEFAULT_SERVICES : [{ name: 'Turno', duration: 30, price: 10000 }];
+      for (const [i, sv] of services.entries()) {
+        await tx`insert into services (business_id, name, duration_min, price, sort)
+                 values (${b.id}, ${sv.name}, ${sv.duration}, ${sv.price}, ${i})`;
+      }
     });
     forgetBusinessCache();
     return json({ ok: true }, 201);
@@ -109,6 +122,14 @@ export const POST = route(async (req, path) => {
     if (!r.count) fail(404, 'Negocio no encontrado.');
     forgetBusinessCache();
     return json({ ok: true });
+  }
+
+  if (key === 'demo') {
+    // Crea el negocio de muestra, o con reset lo deja como nuevo (turnos desde hoy). Conserva su dirección y marca.
+    const reset = body.reset === true;
+    const [row] = await adminTx((tx) => tx<{ id: string }[]>`select demo_business(${reset}) as id`);
+    forgetBusinessCache();
+    return json({ ok: true, id: row.id });
   }
 
   if (key === 'owner') {

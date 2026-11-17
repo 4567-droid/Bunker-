@@ -19,7 +19,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const biz = await safeBusiness();
   const name = biz?.name ?? 'Turnos';
   const own = biz?.slug === 'bunker';
-  const icon = biz?.logo_url ?? '/brand/favicon-32.png';
+  // Cada negocio con su logo; si todavía no cargó uno, un ícono neutro (no el de Bunker)
+  const icon = biz?.logo_url ?? '/brand/turnos-favicon-32.png';
+  const appleIcon = biz?.logo_url ?? '/brand/turnos-apple-icon.png';
   const h = await headers();
   const host = (h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000').split(',')[0].trim();
   const proto = (h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')).split(',')[0].trim();
@@ -31,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: `${name} · Turnos online`, template: `%s · ${name}` },
     description,
     applicationName: name,
-    icons: { icon: own ? '/brand/favicon-32.png' : icon, apple: own ? '/brand/apple-icon.png' : icon },
+    icons: { icon: own ? '/brand/favicon-32.png' : icon, apple: own ? '/brand/apple-icon.png' : appleIcon },
     appleWebApp: { capable: true, title: name.split(/\s+/)[0], statusBarStyle: 'black-translucent' },
     openGraph: {
       type: 'website',

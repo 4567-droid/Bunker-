@@ -19,7 +19,10 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
       ]
     : biz?.logo_url
       ? [{ src: biz.logo_url, sizes: 'any' }]
-      : [];
+      : [
+          { src: '/brand/turnos-icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/brand/turnos-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        ];
   return {
     name,
     short_name: name.split(/\s+/)[0],

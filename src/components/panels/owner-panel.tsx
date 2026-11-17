@@ -417,7 +417,7 @@ function ProfitChart({ months, onPick }: { months: MonthItem[]; onPick: (m: stri
             >
               <span className="flex w-full items-end justify-center" style={{ height: upH }}>
                 {m.profit > 0 && (
-                  <span className="block w-full max-w-[24px] rounded-t-[4px]" style={{ height: h, background: '#F5C400', opacity: on ? 1 : 0.55 }} />
+                  <span className="block w-full max-w-[24px] rounded-t-[4px]" style={{ height: h, background: 'var(--accent)', opacity: on ? 1 : 0.55 }} />
                 )}
               </span>
               <span className="block h-px w-full bg-line-2" />
@@ -462,7 +462,7 @@ function AllMonths({ onPick }: { onPick: (m: string) => void }) {
               {plural(y.months, 'mes', 'meses')} · {plural(y.cuts, 'corte', 'cortes')}
             </span>
           </span>
-          <span className="text-[30px] leading-tight font-bold" style={{ color: y.profit < 0 ? RED : '#F5C400' }}>
+          <span className="text-[30px] leading-tight font-bold" style={{ color: y.profit < 0 ? RED : 'var(--accent)' }}>
             {y.profit < 0 ? `−${money(-y.profit)}` : money(y.profit)}
           </span>
           <span className="-mt-1 text-[13px] font-light text-muted">Ganancia del año{y.year === d.current.slice(0, 4) ? ' hasta hoy' : ''}</span>
@@ -488,7 +488,7 @@ function AllMonths({ onPick }: { onPick: (m: string) => void }) {
               <span className="flex items-center gap-2 text-[17px] font-semibold">
                 {cap(m.label)}
                 {m.isCurrent && <span className="rounded-full border border-line-2 px-2.5 py-0.5 text-xs font-normal text-muted">En curso</span>}
-                {d.best === m.month && <span className="rounded-full bg-[#26230F] px-2.5 py-0.5 text-xs font-medium text-accent">Mejor mes</span>}
+                {d.best === m.month && <span className="rounded-full bg-pick px-2.5 py-0.5 text-xs font-medium text-accent">Mejor mes</span>}
               </span>
               <span className="text-sm text-accent">Ver →</span>
             </span>
@@ -497,7 +497,7 @@ function AllMonths({ onPick }: { onPick: (m: string) => void }) {
             ) : (
               <>
                 <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <span className="text-[24px] leading-tight font-bold" style={{ color: m.profit < 0 ? RED : '#F5C400' }}>
+                  <span className="text-[24px] leading-tight font-bold" style={{ color: m.profit < 0 ? RED : 'var(--accent)' }}>
                     {m.profit < 0 ? `Perdieron ${money(-m.profit)}` : money(m.profit)}
                   </span>
                   <Change diff={m.profitDiff} prevLabel={prev?.label ?? null} />
