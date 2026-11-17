@@ -1,5 +1,5 @@
 import { endSessionsFor, hashPassword, normUser } from '@/lib/auth';
-import { forgetBusinessCache, THEMES, type Theme } from '@/lib/business';
+import { asTheme, forgetBusinessCache, type Theme } from '@/lib/business';
 import { adminTx } from '@/lib/db';
 import { fail, json, notFound, readBody, route, str, uuid } from '@/lib/http';
 import { requireStaff } from '@/lib/session';
@@ -30,10 +30,8 @@ function cleanDomain(v: string): string | null {
   return d;
 }
 
-/** Estilo de la web: 'clasico' (como Bunker) o 'natural' (verde y dorado, con serifa) */
-function cleanTheme(v: unknown): Theme {
-  return THEMES.includes(v as Theme) ? (v as Theme) : 'clasico';
-}
+/** Estilo de la web (clasico, moderno o natural); uno que no existe vuelve a clásico */
+const cleanTheme = (v: unknown): Theme => asTheme(v);
 
 function cleanAccent(v: string): string {
   const a = v.trim() || '#F5C400';

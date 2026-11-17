@@ -245,8 +245,11 @@ export function ClientNav() {
   const { config } = useApp();
   const short = config.business.name.split(/\s+/)[0].toUpperCase();
 
-  // Estilo "natural": links a la izquierda, la marca en el medio y "Mi cuenta" + "Sacar turno" a la derecha
-  if (config.business.theme === 'natural') {
+  // Estilos "moderno" y "natural": links a la izquierda, la marca en el medio y "Mi cuenta" + "Sacar turno" a la derecha
+  const theme = config.business.theme;
+  if (theme === 'natural' || theme === 'moderno') {
+    // En "moderno" el botón principal va con el color del negocio (Bunker: amarillo)
+    const ctaCls = theme === 'moderno' ? 'bg-accent text-bg' : 'bg-ink text-bg';
     const [first, ...rest] = config.business.name.split(/\s+/);
     const left = TABS.filter((t) => t.id === '/turno' || t.id === '/fidelidad' || t.id === '/productos');
     const linkCls = (on: boolean) => `inline-flex min-h-10 items-center rounded-full px-3 text-sm whitespace-nowrap ${on ? 'font-semibold text-accent' : 'text-soft hover:text-ink'}`;
@@ -270,7 +273,7 @@ export function ClientNav() {
                 Mi cuenta
               </Link>
               {path !== '/turno' && (
-                <Link href="/turno" className="inline-flex min-h-10 items-center rounded-full bg-ink px-5 text-sm font-semibold whitespace-nowrap text-bg">
+                <Link href="/turno" className={`inline-flex min-h-10 items-center rounded-full px-5 text-sm font-semibold whitespace-nowrap ${ctaCls}`}>
                   Sacar turno
                 </Link>
               )}

@@ -380,8 +380,9 @@ function BusinessDetail({ b, save }: { b: Biz; save: (p: string, body: Record<st
 
 // Estilos de la web que puede elegir cada negocio (con su color sugerido)
 const THEME_OPTIONS = [
-  { id: 'clasico', label: 'Clásico', desc: 'Negro y amarillo, como Bunker', color: '#F5C400' },
-  { id: 'natural', label: 'Natural', desc: 'Verde oscuro, dorado y letras con serifa', color: '#C9A66B' },
+  { id: 'moderno', label: 'Moderno', desc: 'Título centrado y barra de reserva, con el color del negocio (Bunker)', color: '#F5C400' },
+  { id: 'clasico', label: 'Clásico', desc: 'Título a la izquierda y tarjeta de reserva (el primero)', color: '#F5C400' },
+  { id: 'natural', label: 'Natural', desc: 'Verde oscuro, dorado y hojas (la muestra)', color: '#C9A66B' },
 ];
 
 /** Elegir el estilo de la web. Si el color era el sugerido del estilo anterior, cambia al del nuevo. */
@@ -390,7 +391,7 @@ function ThemePicker({ value, accent, onChange }: { value: string; accent: strin
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[13px] text-muted">Estilo de la web</span>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         {THEME_OPTIONS.map((t) => {
           const on = t.id === cur.id;
           return (

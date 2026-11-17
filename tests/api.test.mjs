@@ -790,7 +790,8 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   // Hace lo mismo que Bunker (servicios, precios y tarjeta; 3 barberos) con otro nombre y su propio estilo
   assert.equal(cfg.data.business.theme, 'natural');
   assert.equal(cfg.data.business.accent, '#C9A66B');
-  assert.equal(cfgBunker.data.business.theme, 'clasico', 'Bunker sigue con su estilo');
+  assert.equal(cfgBunker.data.business.theme, 'moderno', 'Bunker usa el armado nuevo con sus colores');
+  assert.equal(cfgBunker.data.business.accent, '#F5C400');
   assert.deepEqual(
     cfg.data.services.map((x) => [x.name, x.duration, x.price]),
     cfgBunker.data.services.map((x) => [x.name, x.duration, x.price]),

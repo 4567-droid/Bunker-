@@ -247,13 +247,16 @@ Varios negocios y negocio de muestra (migración `006_negocio_demo.sql`):
   copiar la configuración de Bunker y arma los turnos desde hoy; conserva nombre, logo, WhatsApp y dirección web). Local: `node scripts/db.mjs demo [--reset]`.
 - La muestra nunca es el negocio por defecto: sin dominio ni `?negocio=`, se muestra Bunker.
 
-Estilos de web por negocio (migración `008_estilo_natural.sql`, columna `businesses.theme`):
+Estilos de web por negocio (migraciones `008_estilo_natural.sql` y `009_estilo_moderno.sql`, columna `businesses.theme`):
 
-- `clasico` (Bunker): negro y amarillo, Jost, portada con el título a la izquierda (`home-classic.tsx`).
+- `moderno` (**Bunker hoy**, desde el 17/11/2026): el armado centrado con los colores del negocio (negro y amarillo):
+  su logo arriba, título con serifa "Tu estilo, nuestra pasión.", línea amarilla, barra de reserva redonda con el botón
+  "Reservar" amarillo, servicios en pastillas, el sillón dibujado y un brillo amarillo suave.
+- `clasico` (el primer diseño de Bunker): Jost, portada con el título a la izquierda (`home-classic.tsx`).
 - `natural` (la muestra, inspirada en la estética de Bosco Barber Shop, sin usar su nombre, logo ni fotos):
-  verde oscuro y dorado, títulos con serifa (Cormorant Garamond), portada con título centrado, barra de reserva
-  redonda como un buscador y servicios en pastillas, fondo con luces suaves y hojas (`home-natural.tsx`); en la PC,
-  menú con links a la izquierda, la marca en el medio y "Mi cuenta" + "Sacar turno" a la derecha.
+  el mismo armado centrado en verde oscuro y dorado, con hojas.
+- `moderno` y `natural` comparten `home-centered.tsx` (variante por estilo) y, en la PC, el menú con links a la
+  izquierda, la marca con serifa (Cormorant Garamond) en el medio y "Mi cuenta" + "Sacar turno" a la derecha.
 - Los colores de base de cada estilo están en `globals.css` (`html[data-theme='natural']`), así la web, los paneles
   y la Central quedan con la misma marca. Las tarjetas del Inicio son las mismas para los dos (`home-cards.tsx`).
 - El administrador elige el estilo al crear o editar un negocio (con su color sugerido).

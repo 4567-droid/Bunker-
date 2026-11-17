@@ -35,12 +35,19 @@ export interface Business {
   double_stamp_days: number;
   referral_percent: number;
   monthly_goal: number;
-  /** Estilo de la web: 'clasico' (como Bunker) o 'natural' (verde y dorado, con serifa) */
+  /** Estilo de la web: ver THEMES */
   theme: Theme;
 }
 
-export type Theme = 'clasico' | 'natural';
-export const THEMES: Theme[] = ['clasico', 'natural'];
+/**
+ * Estilos de la web:
+ *  - clasico: portada con el título a la izquierda (el primero de Bunker)
+ *  - moderno: título centrado con serifa y barra de reserva redonda, con los colores del negocio (Bunker hoy)
+ *  - natural: el armado moderno en verde oscuro y dorado, con hojas (la muestra)
+ */
+export type Theme = 'clasico' | 'moderno' | 'natural';
+export const THEMES: Theme[] = ['clasico', 'moderno', 'natural'];
+export const asTheme = (v: unknown): Theme => (THEMES.includes(v as Theme) ? (v as Theme) : 'clasico');
 
 export const BIZ_COOKIE = 'bk_biz';
 export const BIZ_HEADER = 'x-bk-biz';
@@ -117,7 +124,7 @@ export function publicBusiness(b: Business) {
     loyaltyReward: b.loyalty_reward ?? 'free',
     loyaltyRewardPct: b.loyalty_reward_pct ?? 50,
     loyaltyRewardText: b.loyalty_reward_text ?? null,
-    theme: (b.theme === 'natural' ? 'natural' : 'clasico') as Theme,
+    theme: asTheme(b.theme),
     doubleStampDays: b.double_stamp_days,
     referralPercent: b.referral_percent,
   };

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Cormorant_Garamond, Jost } from 'next/font/google';
 import { headers } from 'next/headers';
 import type { CSSProperties, ReactNode } from 'react';
-import { currentBusiness } from '@/lib/business';
+import { asTheme, currentBusiness } from '@/lib/business';
 import './globals.css';
 
 const jost = Jost({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700'], variable: '--font-jost', display: 'swap' });
@@ -61,7 +61,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html
       lang="es-AR"
-      data-theme={biz?.theme === 'natural' ? 'natural' : 'clasico'}
+      data-theme={asTheme(biz?.theme)}
       className={`${jost.variable} ${serif.variable}`}
       style={{ '--accent': biz?.accent ?? '#F5C400' } as CSSProperties}
     >

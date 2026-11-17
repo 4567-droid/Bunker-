@@ -1,7 +1,9 @@
 'use client';
 
-// Inicio estilo "natural": verde oscuro, dorado y letras con serifa. Título centrado, una barra de reserva
-// redonda (como un buscador) y los servicios en pastillas debajo; fondo con manchas de luz suaves y hojas.
+// Inicio con el armado "centrado" (estilos "moderno" y "natural"): título grande centrado con serifa, una barra
+// de reserva redonda (como un buscador) y los servicios en pastillas debajo.
+//  - moderno: con los colores del negocio (Bunker: negro y amarillo), su logo arriba y el sillón dibujado
+//  - natural: verde oscuro y dorado, con hojas
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/components/client/app-context';
@@ -10,7 +12,9 @@ import { Icon } from '@/components/ui';
 import { money } from '@/lib/format';
 import { dayLabel } from '@/lib/time';
 
-/** Nombre del negocio con serifa: "NAVAJA" grande y "barber club" chiquito abajo */
+export type CenteredVariant = 'moderno' | 'natural';
+
+/** Nombre del negocio con serifa: "BUNKER" grande y "barber club" chiquito abajo */
 export function Wordmark({ name, size = 'md' }: { name: string; size?: 'md' | 'lg' }) {
   const [first, ...rest] = name.split(/\s+/);
   return (
@@ -33,35 +37,78 @@ function Leaf({ className = '' }: { className?: string }) {
   );
 }
 
-/** Manchas de luz suaves de fondo (verde, verde agua y un poco del dorado del negocio) */
-function Glow() {
+/** El sillón y la lámpara de la portada clásica, en línea fina */
+function Chair({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 300 420" aria-hidden="true" className={className}>
+      <g fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M150 0 v70" />
+        <path d="M110 70 h80 l18 30 h-116 z" />
+        <rect x="150" y="170" width="110" height="130" rx="22" />
+        <rect x="110" y="290" width="170" height="44" rx="14" />
+        <path d="M120 245 h40 M270 245 h20" />
+        <path d="M195 334 v50 M150 400 h90" />
+      </g>
+      <ellipse cx="150" cy="104" rx="46" ry="8" fill="var(--accent)" opacity=".25" />
+    </svg>
+  );
+}
+
+/** Luces suaves de fondo: verdes en "natural"; en "moderno", el color del negocio sobre negro */
+function Glow({ variant }: { variant: CenteredVariant }) {
+  const spots =
+    variant === 'natural'
+      ? [
+          { cls: '-top-40 left-[4%] h-[440px] w-[440px] opacity-70 blur-[90px]', color: '#2E5A28' },
+          { cls: 'top-6 right-[2%] h-[380px] w-[380px] opacity-30 blur-[100px]', color: 'var(--accent)' },
+          { cls: '-bottom-48 left-[30%] h-[460px] w-[560px] opacity-60 blur-[110px]', color: '#1E4B39' },
+        ]
+      : [
+          { cls: '-top-44 left-[18%] h-[420px] w-[520px] opacity-[.22] blur-[100px]', color: 'var(--accent)' },
+          { cls: 'top-24 -right-24 h-[360px] w-[360px] opacity-[.14] blur-[100px]', color: 'var(--accent)' },
+          { cls: '-bottom-56 left-[24%] h-[420px] w-[620px] opacity-80 blur-[110px]', color: '#2A2A27' },
+        ];
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-40 left-[4%] h-[440px] w-[440px] rounded-full opacity-70 blur-[90px]" style={{ background: 'radial-gradient(circle, #2E5A28, transparent 66%)' }} />
-      <div className="absolute top-6 right-[2%] h-[380px] w-[380px] rounded-full opacity-30 blur-[100px]" style={{ background: 'radial-gradient(circle, var(--accent), transparent 62%)' }} />
-      <div className="absolute -bottom-48 left-[30%] h-[460px] w-[560px] rounded-full opacity-60 blur-[110px]" style={{ background: 'radial-gradient(circle, #1E4B39, transparent 66%)' }} />
+      {spots.map((s, i) => (
+        <div key={i} className={`absolute rounded-full ${s.cls}`} style={{ background: `radial-gradient(circle, ${s.color}, transparent 64%)` }} />
+      ))}
     </div>
   );
 }
 
-export function HomeNatural() {
+const TEXTS: Record<CenteredVariant, { title: [string, string]; sub: string }> = {
+  moderno: { title: ['Tu estilo,', 'nuestra pasión.'], sub: 'Cortes de calidad, con atención personalizada. Reservá tu turno en segundos.' },
+  natural: { title: ['Tu estilo,', 'en un espacio natural'], sub: 'Reservá tu turno en segundos: elegí el servicio, el día y tu barbero.' },
+};
+
+export function HomeCentered({ variant }: { variant: CenteredVariant }) {
   const { biz, config, draft, service, barber, wa } = useHome();
   const { setDraft } = useApp();
   const router = useRouter();
   const city = (biz.city ?? '').replace(/^[A-Z]\d{4}\s*/, '').split(',')[0];
+  const t = TEXTS[variant];
 
   const parts = [
     { label: 'Servicio', value: service ? service.name : 'Elegí', step: 1 },
     { label: 'Día y hora', value: draft.day && draft.time ? `${dayLabel(draft.day)} ${draft.time}` : 'Cuándo', step: service ? 2 : 1 },
     { label: 'Barbero', value: barber ? barber.name : 'El que quieras', step: service && draft.time ? 3 : 1 },
   ];
+  // En "moderno" el botón principal va con el color del negocio (en Bunker, amarillo)
+  const reserveCls = variant === 'moderno' ? 'bg-accent text-bg' : 'bg-bg text-ink';
 
   return (
     <div className="flex flex-col">
-      <section className="relative overflow-hidden bg-hero px-5 pt-5 pb-12 md:px-10 md:pt-24 md:pb-24">
-        <Glow />
-        <Leaf className="absolute -top-6 -left-10 w-[150px] -rotate-[28deg] text-ink/10 md:top-10 md:left-[4%] md:w-[220px]" />
-        <Leaf className="absolute -right-12 bottom-0 w-[170px] rotate-[150deg] text-ink/10 md:right-[5%] md:w-[240px]" />
+      <section className="relative overflow-hidden bg-hero px-5 pt-5 pb-12 md:px-10 md:pt-20 md:pb-24">
+        <Glow variant={variant} />
+        {variant === 'natural' ? (
+          <>
+            <Leaf className="absolute -top-6 -left-10 w-[150px] -rotate-[28deg] text-ink/10 md:top-10 md:left-[4%] md:w-[220px]" />
+            <Leaf className="absolute -right-12 bottom-0 w-[170px] rotate-[150deg] text-ink/10 md:right-[5%] md:w-[240px]" />
+          </>
+        ) : (
+          <Chair className="absolute top-16 -right-24 w-[260px] text-line-2 opacity-70 md:top-10 md:right-[4%] md:w-[300px] md:opacity-80" />
+        )}
 
         {/* Celular: la marca arriba (en la PC está en el menú) */}
         <div className="relative flex items-center justify-between md:hidden">
@@ -76,19 +123,22 @@ export function HomeNatural() {
           )}
         </div>
 
-        <div className="relative mx-auto mt-14 flex max-w-[780px] flex-col items-center text-center md:mt-0">
+        <div className="relative mx-auto mt-10 flex max-w-[780px] flex-col items-center text-center md:mt-0">
+          {variant === 'moderno' && biz.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={biz.logoUrl} alt={biz.name} width={88} height={88} className="mb-5 h-[76px] w-[76px] rounded-full md:h-[96px] md:w-[96px]" />
+          )}
           <span className="text-[12px] font-medium tracking-[.3em] text-accent uppercase">
             {biz.kind}
             {city ? ` · ${city}` : ''}
           </span>
           <h1 className="m-0 mt-4 text-[46px] leading-[1.02] font-semibold md:text-[80px]">
-            Tu estilo,
+            {t.title[0]}
             <br />
-            en un espacio natural
+            {t.title[1]}
           </h1>
-          <p className="mt-4 max-w-[520px] text-[17px] font-light text-soft md:text-lg">
-            Reservá tu turno en segundos: elegí el servicio, el día y tu barbero.
-          </p>
+          {variant === 'moderno' && <span className="mt-5 h-[3px] w-14 bg-accent" />}
+          <p className="mt-4 max-w-[540px] text-[17px] font-light text-balance text-soft md:max-w-[660px] md:text-lg">{t.sub}</p>
 
           {/* Barra de reserva, redonda como un buscador */}
           <div className="mt-8 w-full max-w-[720px] rounded-[26px] bg-ink p-2 text-bg shadow-[0_20px_60px_rgba(0,0,0,.35)] md:rounded-full md:p-1.5">
@@ -104,10 +154,7 @@ export function HomeNatural() {
                   <span className="w-full truncate text-[15px] font-medium">{p.value}</span>
                 </button>
               ))}
-              <Link
-                href="/turno"
-                className="mt-2 flex min-h-14 items-center justify-center gap-2 rounded-full bg-bg px-7 text-[15px] font-semibold text-ink md:mt-0 md:min-h-[52px]"
-              >
+              <Link href="/turno" className={`mt-2 flex min-h-14 items-center justify-center gap-2 rounded-full px-7 text-[15px] font-semibold md:mt-0 md:min-h-[52px] ${reserveCls}`}>
                 <Icon name="calendar" size={18} />
                 Reservar
               </Link>

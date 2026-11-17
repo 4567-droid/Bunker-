@@ -48,8 +48,10 @@ html[data-theme='natural'] {
   --color-pick: color-mix(in srgb, var(--accent) 12%, #111A10);
 }
 
+/* Estilos "natural" y "moderno": títulos con serifa (el "moderno" mantiene los colores del negocio) */
 html[data-theme='natural'] h1,
-html[data-theme='natural'] .font-display {
+html[data-theme='moderno'] h1,
+.font-display {
   font-family: var(--font-serif), Georgia, serif;
   letter-spacing: 0.005em;
 }
