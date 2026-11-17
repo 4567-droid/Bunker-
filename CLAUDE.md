@@ -201,5 +201,15 @@ Revisión del 17/11/2026 (migración `003_datos_bunker.sql` con WhatsApp, Instag
 - El corte gratis de la tarjeta vale para un solo turno reservado a la vez.
 - Turno: Atrás/Siguiente fijos abajo, aviso de los turnos que ya tiene, confirmación antes de "Cambiar turno".
 
+Invitaciones (migración `004_invitaciones.sql`):
+
+- El código de un amigo se escribe al crear la cuenta (viene escrito si entra por el link `/?ref=CODIGO`) y avisa
+  al momento si existe. Un código mal escrito da error (antes se ignoraba en silencio).
+- Si se registró sin código, lo puede cargar después en Fidelidad, hasta su primer corte; si ya tiene un turno
+  reservado, el 20% se aplica a ese turno. Una vez usado, la opción desaparece (`me.invite.canUse`).
+- El código de cada cliente sirve para invitar a muchos amigos (un premio por cada amigo que se corta).
+- Quien borra su cuenta deja la huella HMAC de su teléfono en `former_clients` (clave `APP_SECRET`, solo en Vercel):
+  si vuelve a registrarse con ese teléfono, no recibe otra vez el descuento.
+
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

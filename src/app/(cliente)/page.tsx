@@ -129,6 +129,13 @@ export default function Inicio() {
         </Link>
       </section>
 
+      {referral && me?.client && me.invite?.canUse && referral.code !== me.client.referralCode && (
+        <Link href="/fidelidad" className="mx-4 mt-4 flex flex-col gap-1 rounded-[20px] border border-accent px-5 py-[18px]">
+          <span className="text-[17px] font-semibold">{referral.name} te invitó</span>
+          <span className="text-sm font-light text-muted">Tocá acá para usar su código: {referral.percent}% en tu primer corte.</span>
+        </Link>
+      )}
+
       {referral && !me?.client && (
         <Link href="/cuenta" className="mx-4 mt-4 flex flex-col gap-1 rounded-[20px] border border-accent px-5 py-[18px]">
           <span className="text-[17px] font-semibold">{referral.name} te invitó</span>

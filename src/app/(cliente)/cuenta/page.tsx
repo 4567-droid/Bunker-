@@ -89,11 +89,12 @@ function NextAppt({ a, onChange }: { a: Appt; onChange: () => Promise<void> }) {
 }
 
 export default function Cuenta() {
-  const { config, me, setMe, refreshMe, refreshLive, referral, clearReferral, resetDraft } = useApp();
+  const { config, me, setMe, refreshMe, refreshLive, clearReferral, resetDraft } = useApp();
   const [mode, setMode] = useState<AuthMode>('register');
   const [form, setForm] = useState<AuthValues>(EMPTY_AUTH);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const c = me?.client ?? null;
   const area = areaFromWhatsapp(config.business.whatsapp);
   const problem = authProblem(mode, form, area);
@@ -106,8 +107,9 @@ export default function Cuenta() {
     setBusy(true);
     setError(null);
     try {
-      const m = await submitAuth(mode, form, mode === 'register' ? referral?.code : null, area);
+      const m = await submitAuth(mode, form, area);
       setMe(m);
+      setNotice(m.notice ?? null);
       if (mode === 'register') clearReferral();
       setForm(EMPTY_AUTH);
     } catch (e) {
@@ -141,11 +143,6 @@ export default function Cuenta() {
             {mode === 'register' ? 'Una sola vez. Después la página te reconoce.' : 'Con el teléfono con el que te registraste.'}
           </span>
         </div>
-        {referral && mode === 'register' && (
-          <span className="rounded-2xl border border-accent px-4 py-3 text-sm">
-            {referral.name} te invitó: tenés {referral.percent}% en tu primer corte.
-          </span>
-        )}
         <AuthFields mode={mode} setMode={setMode} values={form} setValues={setForm} idPrefix="c" area={area} />
         <ErrorNote text={error} />
         <PrimaryButton onClick={submit} busy={busy} className={problem ? '!bg-line !text-dim' : ''}>
@@ -158,6 +155,7 @@ export default function Cuenta() {
   const next = me.upcoming ?? [];
   return (
     <div className="flex flex-col gap-3.5 px-4 pt-7 pb-6">
+      <OkNote text={notice} />
       <Card className="flex-row items-center gap-3.5 px-5 py-[18px]">
         <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-accent text-[22px] font-semibold text-bg">
           {c.firstName.charAt(0).toUpperCase()}

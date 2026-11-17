@@ -369,6 +369,8 @@ async function check() {
       }
       await step('anotarse en la fila', () => tx`
         insert into queue_entries (business_id, client_id, name) values (${biz.id}, ${cl.id}, 'Chequeo Automático')`);
+      await step('invitaciones (cuentas borradas)', () => tx`
+        insert into former_clients (business_id, phone_hash) values (${biz.id}, 'chequeo')`);
       throw new Deshacer();
     });
   } catch (e) {
@@ -404,7 +406,7 @@ async function reset() {
     process.exit(1);
   }
   await sql.unsafe(`
-    drop table if exists images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
+    drop table if exists former_clients, images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
       auth_failures, sessions, clients, barber_status, staff, businesses, _migrations cascade;
   `);
   console.log('Tablas borradas.');

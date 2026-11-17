@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useApp } from '@/components/client/app-context';
-import { Card, Kicker, PageTitle, StampGrid } from '@/components/ui';
+import { useApp, type Me } from '@/components/client/app-context';
+import { cleanCode } from '@/components/client/auth-fields';
+import { Card, ErrorNote, Field, Kicker, OkNote, PageTitle, PrimaryButton, StampGrid } from '@/components/ui';
+import { api } from '@/lib/api-client';
 import { addDays, dayLabel } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 
@@ -14,13 +16,15 @@ export default function Fidelidad() {
   const c = me?.client ?? null;
   const stamps = c ? Math.min(c.stamps, goal - 1) : 6;
   const [origin, setOrigin] = useState('');
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   useEffect(() => setOrigin(window.location.origin), []);
 
   const visitsToFree = Math.ceil((goal - 1 - 1) / 2) + 2; // 1 + 2 + 2… hasta llenar, y la siguiente gratis
   const inviteUrl = c ? `${origin}/?ref=${c.referralCode}` : origin;
   const inviteText =
     `Te invito a ${biz.name}! Si nunca te cortaste ahí, tenemos ${biz.referralPercent}% de descuento cada uno ` +
-    `en el primer corte. Reservá acá: ${inviteUrl}`;
+    `en el primer corte. Reservá acá: ${inviteUrl}` +
+    (c ? ` (si te lo pide, mi código es ${c.referralCode})` : '');
   const invite = enviarWhatsApp({ text: inviteText }).url;
   const available = (me?.rewards ?? []).filter((r) => r.status !== 'used');
   const doubleUntil = c?.lastVisitOn && biz.doubleStampDays ? addDays(c.lastVisitOn, biz.doubleStampDays) : null;
@@ -91,6 +95,8 @@ export default function Fidelidad() {
         )}
       </section>
 
+      {inviteMsg ? <OkNote text={inviteMsg} /> : c && me?.invite?.canUse && <UseInviteCode onDone={setInviteMsg} />}
+
       {available.length > 0 && (
         <Card className="gap-2 px-5 py-[18px]">
           <Kicker>Tus beneficios</Kicker>
@@ -108,5 +114,52 @@ export default function Fidelidad() {
         </Card>
       )}
     </div>
+  );
+}
+
+/** "¿Te invitó un amigo?": cargar su código después de crear la cuenta (hasta el primer corte, una sola vez) */
+function UseInviteCode({ onDone }: { onDone: (msg: string) => void }) {
+  const { config, setMe, referral, clearReferral } = useApp();
+  const [code, setCode] = useState(referral?.code ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pct = config.business.referralPercent;
+  useEffect(() => {
+    if (referral?.code) setCode((c) => c || referral.code);
+  }, [referral?.code]);
+
+  async function use() {
+    if (!cleanCode(code)) {
+      setError('Escribí el código que te pasó tu amigo.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const m = await api<Me>('/api/client/referral', { code: cleanCode(code) });
+      clearReferral();
+      onDone(m.notice ?? 'Listo: código cargado.');
+      setMe(m);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="gap-2.5 px-5 py-[18px]">
+      <span className="flex flex-col">
+        <span className="text-base font-medium">¿Te invitó un amigo?</span>
+        <span className="text-sm font-light text-muted">
+          Cargá su código antes de tu primer corte y tenés {pct}% de descuento. Se puede usar una sola vez.
+        </span>
+      </span>
+      <Field id="inv-code" label="Código de tu amigo" placeholder="Código de tu amigo (ej: ANA7KQ)" autoComplete="off" value={code} onChange={(v) => setCode(v.toUpperCase())} />
+      <ErrorNote text={error} />
+      <PrimaryButton onClick={use} busy={busy} className="!text-base">
+        Usar código
+      </PrimaryButton>
+    </Card>
   );
 }

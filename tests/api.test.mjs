@@ -616,6 +616,71 @@ test('personal: cada uno cambia su propia contraseña o código', async () => {
   assert.equal(r.status, 401, 'sin sesión no se puede');
 });
 
+test('invitaciones: código a mano, sirve para varios amigos, una sola vez por cliente', async () => {
+  const DAY2 = '2026-11-20';
+  const slotFor = async (barberId) => {
+    const s = await pub.get(`/api/public/slots?service=${ctx.svc.Corte}&day=${DAY2}`);
+    return s.data.slots.find((x) => x.free.includes(barberId));
+  };
+
+  // Código mal escrito: se avisa (antes se ignoraba en silencio y no había descuento)
+  let r = await agent().post('/api/client/register', { name: 'Diego Nuevo', phone: '362 455-0001', ref: 'NOEXISTE1' });
+  assert.equal(r.status, 400);
+  assert.equal(r.data.code, 'bad_ref');
+
+  // Escrito a mano, en minúsculas y con espacios: funciona
+  const diego = agent();
+  r = await diego.post('/api/client/register', { name: 'Diego Nuevo', phone: '362 455-0001', ref: ` ${ctx.anaCode.slice(0, 3).toLowerCase()} ${ctx.anaCode.slice(3)} ` });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.rewards[0].kind, 'welcome');
+  assert.equal(r.data.invite.by, 'Ana');
+  assert.equal(r.data.invite.canUse, false, 'ya lo usó: no vuelve a tener la opción');
+  r = await diego.post('/api/client/referral', { code: ctx.anaCode });
+  assert.equal(r.status, 409, 'no se puede usar dos veces');
+
+  // El mismo código sirve para otro amigo
+  r = await agent().post('/api/client/register', { name: 'Elena Nueva', phone: '362 455-0002', ref: ctx.anaCode });
+  assert.equal(r.status, 201, 'el código de Ana sirve para varios amigos');
+
+  // Se registró sin código y ya reservó: lo carga después y se aplica a ese turno
+  const fede = agent();
+  r = await fede.post('/api/client/register', { name: 'Fede Tarde', phone: '362 455-0003' });
+  assert.equal(r.data.invite.canUse, true);
+  r = await fede.post('/api/client/referral', { code: r.data.client.referralCode });
+  assert.equal(r.status, 400, 'su propio código no vale');
+  assert.match(r.data.error, /propio/);
+  const slot = await slotFor(ctx.barber['Iván']);
+  assert.ok(slot, 'hay horario libre');
+  r = await fede.post('/api/client/book', { serviceId: ctx.svc.Corte, day: DAY2, time: slot.time, barberId: ctx.barber['Iván'], payment: 'efectivo' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.appointment.finalPrice, 16000);
+  const fedeAppt = r.data.appointment.id;
+  r = await fede.post('/api/client/referral', { code: 'nada99' });
+  assert.equal(r.status, 400);
+  r = await fede.post('/api/client/referral', { code: ctx.anaCode });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.match(r.data.notice, /Ana/);
+  assert.equal(r.data.upcoming[0].finalPrice, 12800, '20% aplicado al turno que ya tenía');
+  assert.equal(r.data.invite.canUse, false);
+  r = await fede.post('/api/client/referral', { code: ctx.anaCode });
+  assert.equal(r.status, 409);
+  assert.equal((await fede.post('/api/client/cancel', { id: fedeAppt })).status, 200);
+
+  // Si borra la cuenta y la vuelve a crear con el mismo teléfono, el 20% no se repite
+  assert.equal((await diego.post('/api/client/delete', { confirm: true })).status, 200);
+  r = await agent().post('/api/client/register', { name: 'Diego Nuevo', phone: '3624550001', ref: ctx.anaCode });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.code, 'ref_not_new');
+  const again = agent();
+  r = await again.post('/api/client/register', { name: 'Diego Nuevo', phone: '3624550001' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.invite.canUse, false, 'ya fue cliente: no tiene la opción');
+  const [row] = await sql`select count(*)::int as n from former_clients`;
+  assert.ok(row.n >= 1, 'queda la huella del teléfono');
+  const [plain] = await sql`select count(*)::int as n from former_clients where phone_hash like '%4550001%'`;
+  assert.equal(plain.n, 0, 'no se guarda el número');
+});
+
 test('seguridad: CSRF y freno a intentos', async () => {
   let r = await bruno.post('/api/client/logout', {}, { origin: 'https://otro-sitio.com' });
   assert.equal(r.status, 403);

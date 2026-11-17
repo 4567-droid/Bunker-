@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp, type Appt } from '@/components/client/app-context';
-import { AuthFields, authProblem, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
+import { AuthFields, authProblem, cleanCode, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
 import { Avatar, Chip, Dot, ErrorNote, GhostButton, GREEN, Kicker, OptionRow, RED, SummaryRow, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { areaFromWhatsapp, money, PAYMENTS, type Payment } from '@/lib/format';
@@ -40,6 +40,7 @@ export default function Turno() {
   const [booked, setBooked] = useState<Appt | null>(null);
   const [waSent, setWaSent] = useState(false);
   const [slotsKey, setSlotsKey] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const service = config.services.find((s) => s.id === draft.serviceId) ?? null;
   const registered = !!me?.client;
@@ -111,7 +112,7 @@ export default function Turno() {
   const discount = useMemo(() => {
     if (!service) return null;
     if (registered && quote && quote.discountPct > 0) return { pct: quote.discountPct, reason: quote.reason ?? '', final: quote.finalPrice };
-    if (!registered && referral && mode === 'register') {
+    if (!registered && referral && mode === 'register' && cleanCode(form.ref) === referral.code) {
       return {
         pct: referral.percent,
         reason: `${referral.percent}% de bienvenida (te invitó ${referral.name})`,
@@ -119,7 +120,7 @@ export default function Turno() {
       };
     }
     return null;
-  }, [service, registered, quote, referral, mode]);
+  }, [service, registered, quote, referral, mode, form.ref]);
   const servicePrice = discount ? discount.final : (service?.price ?? 0);
   const payName = (p: Payment | null) => (p ? PAYMENTS[p].name : '—');
   const payDesc = (p: Payment) =>
@@ -143,8 +144,9 @@ export default function Turno() {
     setError(null);
     try {
       if (!registered) {
-        const m = await submitAuth(mode, form, mode === 'register' ? referral?.code : null, area);
+        const m = await submitAuth(mode, form, area);
         setMe(m);
+        setNotice(m.notice ?? null);
         if (mode === 'register') clearReferral();
       }
       const r = await api<{ appointment: Appt }>('/api/client/book', {
@@ -163,8 +165,9 @@ export default function Turno() {
       window.scrollTo({ top: 0 });
     } catch (e) {
       setError((e as Error).message);
-      if ((e as Error & { code?: string }).code === 'needs_email') setMode('login');
-      else setSlotsKey((k) => k + 1);
+      const code = (e as Error & { code?: string }).code;
+      if (code === 'needs_email') setMode('login');
+      else if (code !== 'bad_ref' && code !== 'ref_not_new') setSlotsKey((k) => k + 1);
     } finally {
       setBusy(false);
     }
@@ -223,6 +226,7 @@ export default function Turno() {
             Total {money(booked.total)}
             {booked.discountReason ? ` · ${booked.discountReason}` : ''}
           </span>
+          {notice && <span className="text-sm text-accent">{notice}</span>}
           {booked.payment === 'transferencia' && biz.transferAlias && booked.total > 0 && (
             <div className="flex items-center justify-between gap-3 rounded-[14px] bg-field px-4 py-3">
               <span className="flex min-w-0 flex-col">
