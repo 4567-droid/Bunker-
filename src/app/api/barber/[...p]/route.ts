@@ -14,7 +14,7 @@ import {
   lockAppointment,
   minutesUntil,
   quote,
-  shiftedTimes,
+  shiftFromRows,
   startCut,
   type ApptRow,
 } from '@/lib/booking';
@@ -47,7 +47,7 @@ async function agenda(tx: Tx, biz: Business, st: StaffRow, day: string, now: Now
     where a.business_id = ${biz.id} and a.barber_id = ${st.id} and a.day = ${day}
       and a.status not in ('cancelled')
     order by a.start_min`;
-  const shifted = day === now.day ? await shiftedTimes(tx, biz.id, st.id, day, now) : {};
+  const shifted = shiftFromRows(rows, day, now);
   const [status] = await tx<{ state: string; free_at: Date | null; appointment_id: string | null }[]>`
     select state, free_at, appointment_id from barber_status where barber_id = ${st.id}`;
   const cuttingRow = rows.find((r) => r.status === 'in_progress') ?? null;
@@ -202,13 +202,23 @@ export const POST = route(async (req, path) => {
   const now = bizNow(biz);
   const body = await readBody(req);
   const [action, sub] = path;
+  // Con ?view=<día> la respuesta trae la agenda y la fila ya actualizadas: el celular no tiene que volver a pedirlas
+  const view = new URL(req.url).searchParams.get('view');
+  const done = async (data: Record<string, unknown>, status = 200) => {
+    if (!isDay(view)) return json(data, status);
+    const fresh = await tenantTx(biz.id, async (tx) => ({
+      agenda: await agenda(tx, biz, st, view as string, bizNow(biz)),
+      queue: await queueList(tx, biz, st),
+    }));
+    return json({ ...data, ...fresh }, status);
+  };
 
   switch (action) {
     case 'start': {
       const minutes = int(body, 'minutes', { min: 5, max: 120, label: 'el tiempo' });
       if (!EST_OPTIONS.includes(minutes)) fail(400, 'Elegí cuánto tardás.');
       await tenantTx(biz.id, async (tx) => startCut(tx, await myAppointment(tx, biz, st, body.id), minutes));
-      return json({ ok: true });
+      return done({ ok: true });
     }
     case 'complete': {
       const result = await tenantTx(biz.id, async (tx) => {
@@ -217,22 +227,22 @@ export const POST = route(async (req, path) => {
         if (!id) fail(409, 'No estás cortando a nadie ahora.');
         return completeAppointment(tx, biz, await myAppointment(tx, biz, st, id), now);
       });
-      return json({ ok: true, ...result });
+      return done({ ok: true, ...result });
     }
     case 'cancel':
       await tenantTx(biz.id, async (tx) => cancelAppointment(tx, await myAppointment(tx, biz, st, body.id)));
-      return json({ ok: true });
+      return done({ ok: true });
 
     case 'noshow':
       await tenantTx(biz.id, async (tx) => noShowAppointment(tx, await myAppointment(tx, biz, st, body.id), now));
-      return json({ ok: true });
+      return done({ ok: true });
 
     case 'remind':
       await tenantTx(biz.id, async (tx) => {
         const a = await myAppointment(tx, biz, st, body.id);
         await tx`update appointments set reminded_at = now() where id = ${a.id}`;
       });
-      return json({ ok: true });
+      return done({ ok: true });
 
     case 'block': {
       if (sub === 'delete') {
@@ -240,11 +250,11 @@ export const POST = route(async (req, path) => {
           const r = await tx`delete from blocks where id = ${uuid(body.id)} and business_id = ${biz.id} and barber_id = ${st.id}`;
           if (!r.count) fail(404, 'Ese bloqueo no es tuyo o ya no existe.');
         });
-        return json({ ok: true });
+        return done({ ok: true });
       }
       const input = parseBlockInput(body, { multiDay: true });
       const n = await tenantTx(biz.id, (tx) => createBlocks(tx, biz, { ...input, barberId: st.id, by: st.id }, now));
-      return json({ ok: true, days: n }, 201);
+      return done({ ok: true, days: n }, 201);
     }
 
     case 'status': {
@@ -257,7 +267,7 @@ export const POST = route(async (req, path) => {
                  values (${st.id}, ${biz.id}, ${st.name}, ${state})
                  on conflict (barber_id) do update set state = ${state}, free_at = null, appointment_id = null, updated_at = now()`;
       });
-      return json({ ok: true });
+      return done({ ok: true });
     }
 
     case 'queue': {
@@ -300,7 +310,7 @@ export const POST = route(async (req, path) => {
         }
         return queueList(tx, biz, st);
       });
-      return json(out);
+      return done(out);
     }
 
     case 'appointments': {
@@ -320,7 +330,7 @@ export const POST = route(async (req, path) => {
         );
         return apptDto(a, { barberName: st.name });
       });
-      return json({ appointment: appt }, 201);
+      return done({ appointment: appt }, 201);
     }
   }
   notFound();

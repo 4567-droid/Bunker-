@@ -446,6 +446,12 @@ export async function shiftedTimes(tx: Tx, bizId: string, barberId: string, day:
   const appts = await tx<ApptRow[]>`
     select * from appointments where business_id = ${bizId} and barber_id = ${barberId} and day = ${day}
       and status in ('booked', 'in_progress') order by start_min`;
+  return shiftFromRows(appts, day, now);
+}
+
+/** Corrimiento de los turnos que siguen al corte en curso, con los turnos del día ya cargados */
+export function shiftFromRows(rows: ApptRow[], day: string, now: Now): Record<string, number> {
+  const appts = rows.filter((a) => a.status === 'booked' || a.status === 'in_progress').sort((a, b) => a.start_min - b.start_min);
   const cutting = appts.find((a) => a.status === 'in_progress');
   if (!cutting || day !== now.day) return {};
   const left = minutesUntil(cutting.est_end_at) ?? 0;

@@ -1,7 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
-import { systemTx } from './db';
+import { db } from './db';
 import { fail } from './http';
 import type { Hours } from './time';
 
@@ -37,22 +37,8 @@ export interface Business {
 export const BIZ_COOKIE = 'bk_biz';
 export const BIZ_HEADER = 'x-bk-biz';
 
-const memo = new Map<string, { at: number; biz: Business | null }>();
+const memo = new Map<string, { at: number; biz: Business }>();
 const TTL = 30_000;
-
-async function bySlugOrDomain(kind: 'slug' | 'domain', value: string): Promise<Business | null> {
-  const key = `${kind}:${value}`;
-  const hit = memo.get(key);
-  if (hit && Date.now() - hit.at < TTL) return hit.biz;
-  const rows = await systemTx((tx) =>
-    kind === 'slug'
-      ? tx<Business[]>`select * from businesses where slug = ${value}`
-      : tx<Business[]>`select * from businesses where domain = ${value} or domain = ${'www.' + value}`,
-  );
-  const biz = rows[0] ?? null;
-  memo.set(key, { at: Date.now(), biz });
-  return biz;
-}
 
 export function forgetBusinessCache(): void {
   memo.clear();
@@ -63,27 +49,33 @@ export function forgetBusinessCache(): void {
  * 1) el que tiene cargado este dominio (bunkerbarberclub.com.ar)
  * 2) si el dominio no es de nadie (ej. *.vercel.app o localhost): el elegido con ?negocio=slug
  * 3) DEFAULT_BUSINESS_SLUG, o el primero que se cargó
+ * Todo en una sola consulta, y se recuerda 30 segundos (cada ida a la base suma demora).
  */
 export const currentBusiness = cache(async (): Promise<Business> => {
   const h = await headers();
   const host = (h.get('x-forwarded-host') ?? h.get('host') ?? '').split(',')[0].trim().toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '');
-  if (host) {
-    const byDomain = await bySlugOrDomain('domain', host);
-    if (byDomain) return byDomain;
-  }
-  const override = h.get(BIZ_HEADER) ?? (await cookies()).get(BIZ_COOKIE)?.value;
-  if (override && /^[a-z0-9-]{2,40}$/.test(override)) {
-    const b = await bySlugOrDomain('slug', override);
-    if (b) return b;
-  }
-  const def = process.env.DEFAULT_BUSINESS_SLUG;
-  if (def) {
-    const b = await bySlugOrDomain('slug', def);
-    if (b) return b;
-  }
-  const rows = await systemTx((tx) => tx<Business[]>`select * from businesses order by created_at limit 1`);
+  const raw = h.get(BIZ_HEADER) ?? (await cookies()).get(BIZ_COOKIE)?.value ?? '';
+  const override = /^[a-z0-9-]{2,40}$/.test(raw) ? raw : '';
+  const def = process.env.DEFAULT_BUSINESS_SLUG ?? '';
+  const key = `${host}|${override}|${def}`;
+  const hit = memo.get(key);
+  if (hit && Date.now() - hit.at < TTL) return hit.biz;
+  const rows = await db()<(Business & { pick: number })[]>`
+    select b.*, case when ${host} <> '' and b.domain in (${host}, ${'www.' + host}) then 0
+                     when b.slug = ${override} then 1
+                     when b.slug = ${def} then 2
+                     else 3 end as pick
+    from businesses b
+    where (${host} <> '' and b.domain in (${host}, ${'www.' + host}))
+       or b.slug in (${override}, ${def})
+       or b.id = (select id from businesses order by created_at limit 1)
+    order by pick, b.created_at
+    limit 1`;
   if (!rows[0]) fail(503, 'Todavía no hay ningún negocio cargado. En tu PC: `npm run db:seed`. En Vercel: Redeploy.');
-  return rows[0];
+  const { pick: _pick, ...biz } = rows[0];
+  void _pick;
+  memo.set(key, { at: Date.now(), biz });
+  return biz;
 });
 
 /** Lo que cualquiera puede ver del negocio */

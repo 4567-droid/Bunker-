@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
-import { systemTx } from './db';
+import { db, systemTx } from './db';
 import { fail } from './http';
 
 // ---------------------------------------------------------------------
@@ -80,14 +80,20 @@ export interface SessionRow {
   staff_id: string | null;
 }
 
-export async function readSession(kind: 'client' | 'staff'): Promise<SessionRow | null> {
+/** Hash del token de la cookie de sesión (o null si no hay cookie) */
+export async function sessionTokenHash(kind: 'client' | 'staff'): Promise<string | null> {
   const jar = await cookies();
   const token = jar.get(kind === 'client' ? CLIENT_COOKIE : STAFF_COOKIE)?.value;
   if (!token || token.length > 100) return null;
-  const rows = await systemTx(
-    (tx) => tx<SessionRow[]>`select kind, business_id, client_id, staff_id from sessions
-                              where token_hash = ${sha256(token)} and kind = ${kind} and expires_at > now()`,
-  );
+  return sha256(token);
+}
+
+export async function readSession(kind: 'client' | 'staff'): Promise<SessionRow | null> {
+  const hash = await sessionTokenHash(kind);
+  if (!hash) return null;
+  // Una sola consulta suelta (sin begin/commit): es una lectura
+  const rows = await db()<SessionRow[]>`select kind, business_id, client_id, staff_id from sessions
+                                         where token_hash = ${hash} and kind = ${kind} and expires_at > now()`;
   return rows[0] ?? null;
 }
 
@@ -115,11 +121,9 @@ export async function clientIp(): Promise<string> {
 }
 
 export async function guardAttempts(keys: string[], max = 8, windowMin = 15): Promise<void> {
-  const rows = await systemTx(
-    (tx) => tx<{ n: number }[]>`select count(*)::int as n from auth_failures
-                                where key = any(${keys}) and created_at > now() - make_interval(mins => ${windowMin})
-                                group by key`,
-  );
+  const rows = await db()<{ n: number }[]>`select count(*)::int as n from auth_failures
+                                          where key = any(${keys}) and created_at > now() - make_interval(mins => ${windowMin})
+                                          group by key`;
   if (rows.some((r) => r.n >= max)) fail(429, 'Demasiados intentos. Esperá unos minutos y probá de nuevo.');
 }
 
