@@ -66,6 +66,7 @@ interface Agenda {
   today: string;
   now: string;
   goal: number;
+  prize?: { cell: string; note: string };
   barber: { id: string; name: string };
   status: { state: 'free' | 'busy' | 'cutting'; freeInMin: number | null };
   counters: { total: number; confirmed: number; done: number; noShow: number };
@@ -236,7 +237,7 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
     const r = await act('/api/barber/complete', id ? { id } : {});
     if (r) {
       const added = Number(r.added ?? 0);
-      setOk(r.free ? 'Listo: era su corte gratis. La tarjeta vuelve a empezar.' : added ? `Corte registrado: +${added} ${added === 2 ? 'sellos (doble sello)' : 'sello'}.` : 'Corte registrado.');
+      setOk(r.free ? String(r.prize ?? 'Listo: completó la tarjeta. Vuelve a empezar.') : added ? `Corte registrado: +${added} ${added === 2 ? 'sellos (doble sello)' : 'sello'}.` : 'Corte registrado.');
     }
   }
 
@@ -377,13 +378,13 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
                     <span className="text-[13px] font-light text-muted">
                       Tarjeta: {Math.min(selRow.client.stamps ?? 0, agenda.goal - 1)} de {agenda.goal}
                     </span>
-                    <StampGrid stamps={selRow.client.stamps ?? 0} goal={agenda.goal} mini />
+                    <StampGrid stamps={selRow.client.stamps ?? 0} goal={agenda.goal} prize={agenda.prize?.cell} mini />
                   </div>
                 ) : (
                   <span className="text-[13px] font-light text-muted">Sin cuenta: este corte no suma sellos.</span>
                 )}
                 {selRow.status !== 'completed' && selRow.client.nextFree && (
-                  <span className="text-sm text-accent">Con este corte completa la tarjeta: es gratis.</span>
+                  <span className="text-sm text-accent">{agenda.prize?.note ?? 'Con este corte completa la tarjeta.'}</span>
                 )}
                 {selRow.status !== 'completed' && !selRow.client.nextFree && selRow.client.doubleStamp && (
                   <span className="text-sm text-accent">Volvió antes de 30 días: suma doble sello.</span>
@@ -696,33 +697,80 @@ function NewAppointment({ services, today, act }: { services: Service[]; today: 
   );
 }
 
+interface ClientHit {
+  id: string;
+  name: string;
+  mine: boolean;
+  phone: string | null;
+  phoneDisplay: string;
+  email: string | null;
+  stamps: number;
+  visits: number;
+  lastDay: string | null;
+}
+
+/** Clientes: los suyos, y un buscador por nombre o teléfono para encontrar a cualquiera del local */
 function ClientsTab({ onLogout }: { onLogout: () => void }) {
-  const [data, setData] = useState<{ goal: number; clients: { id: string; name: string; phoneDisplay: string; email: string | null; stamps: number }[] } | null>(null);
+  const [data, setData] = useState<{ goal: number; prize: string; query: string; clients: ClientHit[] } | null>(null);
   const [q, setQ] = useState('');
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    api<typeof data>('/api/barber/clients').then(setData).catch(() => setData({ goal: 10, clients: [] }));
-  }, []);
-  const list = (data?.clients ?? []).filter((c) => !q || `${c.name} ${c.phoneDisplay}`.toLowerCase().includes(q.toLowerCase()));
+    let off = false;
+    setLoading(true);
+    const t = setTimeout(
+      () => {
+        api<{ goal: number; prize: string; query: string; clients: ClientHit[] }>(`/api/barber/clients?q=${encodeURIComponent(q.trim())}`)
+          .then((r) => !off && setData(r))
+          .catch(() => !off && setData({ goal: 10, prize: 'Gratis', query: q, clients: [] }))
+          .finally(() => !off && setLoading(false));
+      },
+      q ? 300 : 0,
+    );
+    return () => {
+      off = true;
+      clearTimeout(t);
+    };
+  }, [q]);
+  const goal = data?.goal ?? 10;
+  const fmt = (d: string | null) => (d ? `${Number(d.slice(8))}/${Number(d.slice(5, 7))}` : null);
+  const list = data?.clients ?? [];
   return (
     <div className="flex flex-col gap-2.5">
-      <Kicker className="px-1">Mis clientes</Kicker>
-      <Field id="cq" label="Buscar" placeholder="Buscar por nombre o teléfono" value={q} onChange={setQ} />
+      <Kicker className="px-1">{q.trim() ? 'Buscar cliente' : 'Mis clientes'}</Kicker>
+      <Field id="cq" label="Buscar" type="search" placeholder="Buscar por nombre o teléfono" value={q} onChange={setQ} />
+      {q.trim() && <span className="px-1 text-[13px] font-light text-muted">Busca en todos los clientes del local, se escriba como se escriba.</span>}
       {!data && <span className="text-muted">Cargando…</span>}
-      {data && list.length === 0 && <span className="px-1 text-muted">Todavía no hay clientes.</span>}
-      {list.map((c) => (
-        <div key={c.id} className="flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3">
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-base font-medium">{c.name}</span>
-            <span className="truncate text-[13px] font-light text-muted">
-              {c.phoneDisplay}
-              {c.email ? ` · ${c.email}` : ''}
+      {data && !loading && list.length === 0 && (
+        <span className="px-1 text-muted">{q.trim() ? 'No encontramos a nadie con eso.' : 'Todavía no atendiste clientes con cuenta.'}</span>
+      )}
+      {list.map((c) => {
+        const last = fmt(c.lastDay);
+        return (
+          <div key={c.id} className="flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3">
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-base font-medium">{c.name}</span>
+              <span className="truncate text-[13px] font-light text-muted">
+                {c.phone ? (
+                  <a href={`tel:${c.phone}`} className="underline">
+                    {c.phoneDisplay}
+                  </a>
+                ) : (
+                  c.phoneDisplay
+                )}
+                {c.email ? ` · ${c.email}` : ''}
+              </span>
+              <span className="text-xs font-light text-dim">
+                {c.visits} {c.visits === 1 ? 'visita' : 'visitas'}
+                {last ? ` · último corte ${last}` : ''}
+                {c.mine ? '' : ' · cliente del local'}
+              </span>
             </span>
-          </span>
-          <span className="text-base font-semibold text-accent">
-            {Math.min(c.stamps, (data?.goal ?? 10) - 1)}/{data?.goal ?? 10}
-          </span>
-        </div>
-      ))}
+            <span className="text-base font-semibold text-accent">
+              {Math.min(c.stamps, goal - 1)}/{goal}
+            </span>
+          </div>
+        );
+      })}
       <div className="mt-3">
         <PasswordForm code />
       </div>

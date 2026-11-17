@@ -211,5 +211,15 @@ Invitaciones (migración `004_invitaciones.sql`):
 - Quien borra su cuenta deja la huella HMAC de su teléfono en `former_clients` (clave `APP_SECRET`, solo en Vercel):
   si vuelve a registrarse con ese teléfono, no recibe otra vez el descuento.
 
+Premio de la tarjeta y búsqueda (migración `005_premio_tarjeta.sql`):
+
+- Central → Ajustes → "Tarjeta de fidelidad": el negocio elige el premio (corte gratis, % de descuento o un regalo
+  con texto) y cuántos cortes hacen falta (`loyalty_goal`: el N.º corte tiene el premio). Todos los textos salen de
+  `prizeInfo()` en `rules.ts`. Con "regalo" el corte se cobra normal y el barbero ve qué entregar.
+- Búsqueda de clientes (`src/lib/client-search.ts`): sin importar tildes ni mayúsculas, varias palabras, y el teléfono
+  escrito de cualquier forma (con 7+ números compara el número sin código de área). En la Central, buscador arriba del
+  Resumen. El barbero busca entre todos los clientes del local, pero el teléfono y el correo completos solo los ve de
+  los que atendió él.
+
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

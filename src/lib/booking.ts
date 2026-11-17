@@ -1,8 +1,8 @@
 import 'server-only';
-import type { Business } from './business';
+import { bizPrize, type Business } from './business';
 import type { Tx } from './db';
 import { fail } from './http';
-import { freeSlots, nextIsFree, projectShift, queueWait, stampOutcome, type BusyBlock } from './rules';
+import { freeSlots, nextIsFree, prizeInfo, projectShift, queueWait, stampOutcome, type BusyBlock } from './rules';
 import type { ClientRow } from './session';
 import { addDays, closesAt, dayLabel, fmtMin, isDay, isOpenAt, isOpenDay, nextOpening, nowIn, rangesFor, type Cuts, type Now } from './time';
 import type { Payment } from './format';
@@ -206,7 +206,10 @@ async function pricing(tx: Tx, biz: Business, client: ClientRow | null, service:
     // El corte gratis es uno solo: si ya tiene otro turno reservado como gratis, este se cobra
     const [taken] = await tx`select 1 from appointments
                              where client_id = ${client.id} and loyalty_free and status in ('booked', 'in_progress') limit 1`;
-    if (!taken) return { pct: 100, reason: 'Corte gratis · tarjeta de fidelidad', rewardId: null, loyaltyFree: true };
+    if (!taken) {
+      const pz = prizeInfo(bizPrize(biz));
+      return { pct: pz.pct, reason: pz.reason, rewardId: null, loyaltyFree: true };
+    }
   }
   const [r] = await tx<{ id: string; kind: string; percent: number }[]>`
     select id, kind, percent from rewards
@@ -344,7 +347,11 @@ export async function completeAppointment(tx: Tx, biz: Business, appt: ApptRow, 
   let finalPrice = appt.final_price;
   let pct = appt.discount_pct;
   let reason = appt.discount_reason;
-  let result = { free: false, added: 0, double: false, stamps: null as number | null };
+  let result = { free: false, added: 0, double: false, stamps: null as number | null, prize: null as string | null };
+  // Precio del turno sin el premio de la tarjeta (si al reservar ya se lo había puesto)
+  const base = appt.loyalty_free
+    ? { pct: 0, reason: null as string | null, final: appt.price }
+    : { pct: appt.discount_pct, reason: appt.discount_reason, final: appt.final_price };
 
   if (appt.client_id) {
     const [c] = await tx<ClientRow[]>`select * from clients where id = ${appt.client_id} for update`;
@@ -356,17 +363,18 @@ export async function completeAppointment(tx: Tx, biz: Business, appt: ApptRow, 
         goal: biz.loyalty_goal,
         doubleDays: biz.double_stamp_days,
       });
-      if (out.free) {
-        pct = 100;
-        reason = 'Corte gratis · tarjeta de fidelidad';
-        finalPrice = 0;
+      const pz = prizeInfo(bizPrize(biz));
+      if (out.free && pz.pct > 0) {
+        // Premio gratis o con descuento: reemplaza a cualquier otro descuento (que queda para la próxima)
+        pct = pz.pct;
+        reason = pz.reason;
+        finalPrice = Math.round((appt.price * (100 - pz.pct)) / 100);
         await releaseReward(tx, appt);
       } else {
-        if (appt.loyalty_free) {
-          pct = 0;
-          reason = null;
-          finalPrice = appt.price;
-        }
+        // Corte normal, o premio "regalo": se cobra como estaba y el beneficio de invitación se usa
+        pct = base.pct;
+        finalPrice = base.final;
+        reason = out.free ? (base.reason ? `${base.reason} · ${pz.reason}` : pz.reason) : base.reason;
         if (appt.reward_id) {
           await tx`update rewards set status = 'used', used_at = now() where id = ${appt.reward_id}`;
         }
@@ -379,7 +387,7 @@ export async function completeAppointment(tx: Tx, biz: Business, appt: ApptRow, 
                  values (${biz.id}, ${c.referred_by}, 'referral', ${biz.referral_percent}, ${c.id})
                  on conflict do nothing`;
       }
-      result = { free: out.free, added: out.added, double: out.double, stamps: out.newStamps };
+      result = { free: out.free, added: out.added, double: out.double, stamps: out.newStamps, prize: out.free ? pz.done : null };
     }
   }
   await tx`update appointments

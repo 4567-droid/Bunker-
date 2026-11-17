@@ -681,6 +681,85 @@ test('invitaciones: código a mano, sirve para varios amigos, una sola vez por c
   assert.equal(plain.n, 0, 'no se guarda el número');
 });
 
+test('premio de la tarjeta: la barbería elige gratis, descuento o regalo, y cuántos cortes', async () => {
+  const st = await owner.get('/api/owner/settings');
+  const b = st.data.business;
+  assert.equal(b.loyaltyReward, 'free');
+
+  // 50% de descuento en el 6.º corte
+  let r = await owner.post('/api/owner/business', { ...b, loyaltyReward: 'discount', loyaltyRewardPct: 50, loyaltyGoal: 6 });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const cfg = await pub.get('/api/public/config');
+  assert.equal(cfg.data.business.loyaltyReward, 'discount');
+  assert.equal(cfg.data.business.loyaltyRewardPct, 50);
+  assert.equal(cfg.data.business.loyaltyGoal, 6);
+  const gina = agent();
+  r = await gina.post('/api/client/register', { name: 'Gina Premio', phone: '362 455-0010' });
+  assert.equal(r.status, 201);
+  await sql`update clients set stamps = 5 where phone = '3624550010'`;
+  let q = await gina.get(`/api/client/quote?service=${ctx.svc.Corte}`);
+  assert.equal(q.data.discountPct, 50);
+  assert.match(q.data.reason, /50%/);
+
+  // Regalo: hay que decir qué se lleva; el corte se cobra normal
+  r = await owner.post('/api/owner/business', { ...b, loyaltyReward: 'gift', loyaltyRewardText: '', loyaltyGoal: 6 });
+  assert.equal(r.status, 400, 'el regalo hay que escribirlo');
+  r = await owner.post('/api/owner/business', { ...b, loyaltyReward: 'gift', loyaltyRewardText: 'una cera mate', loyaltyGoal: 6 });
+  assert.equal(r.status, 200);
+  q = await gina.get(`/api/client/quote?service=${ctx.svc.Corte}`);
+  assert.equal(q.data.discountPct, 0);
+  assert.match(q.data.reason, /cera mate/);
+
+  // Reserva y el barbero la marca: se cobra completo, el barbero ve qué entregar y la tarjeta vuelve a 0
+  const DAY3 = '2026-11-21';
+  const s = await pub.get(`/api/public/slots?service=${ctx.svc.Corte}&day=${DAY3}`);
+  const slot = s.data.slots.find((x) => x.free.includes(ctx.barber.Mauri));
+  assert.ok(slot, 'hay horario libre con Mauri');
+  r = await gina.post('/api/client/book', { serviceId: ctx.svc.Corte, day: DAY3, time: slot.time, barberId: ctx.barber.Mauri, payment: 'efectivo' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.appointment.discountPct, 0);
+  const ag = await mauri.get(`/api/barber/agenda?day=${DAY3}`);
+  assert.match(ag.data.prize.note, /cera mate/);
+  assert.equal(ag.data.prize.cell, 'Premio');
+  r = await mauri.post('/api/barber/complete', { id: r.data.appointment.id });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.free, true);
+  assert.match(r.data.prize, /entregale una cera mate/);
+  const me = await gina.get('/api/client/me');
+  assert.equal(me.data.client.stamps, 0);
+  assert.equal(me.data.history[0].paid, 16000, 'el regalo no descuenta el corte');
+
+  // Vuelve a como estaba: corte gratis cada 10
+  r = await owner.post('/api/owner/business', { ...b });
+  assert.equal(r.status, 200);
+  assert.equal((await pub.get('/api/public/config')).data.business.loyaltyReward, 'free');
+});
+
+test('buscar clientes por nombre o teléfono, se escriba como se escriba', async () => {
+  const names = async (agentX, path, q) => (await agentX.get(`${path}?q=${encodeURIComponent(q)}`)).data.clients.map((c) => c.name);
+  // Central: sin tildes, varias palabras y el teléfono con 0, 15, +54 9 o solo el número
+  assert.ok((await names(owner, '/api/owner/clients', 'perez')).includes('Ana Pérez'), 'sin tilde');
+  assert.ok((await names(owner, '/api/owner/clients', 'ANA PER')).includes('Ana Pérez'), 'varias palabras');
+  for (const tel of ['0362 15 422-2222', '+54 9 362 422 2222', '422-2222', '3624222222']) {
+    assert.ok((await names(owner, '/api/owner/clients', tel)).includes('Bruno Díaz'), `teléfono "${tel}"`);
+  }
+  assert.equal((await names(owner, '/api/owner/clients', 'zzzz')).length, 0);
+
+  // Barbero: encuentra a cualquiera del local; el teléfono completo solo de los que atendió
+  let r = await mauri.get(`/api/barber/clients?q=${encodeURIComponent('diaz')}`);
+  const bruno2 = r.data.clients.find((c) => c.name === 'Bruno Díaz');
+  assert.ok(bruno2 && bruno2.mine, 'Bruno es cliente de Mauri');
+  assert.equal(bruno2.phone, '3624222222');
+  r = await mauri.get(`/api/barber/clients?q=${encodeURIComponent('elena')}`);
+  const elena = r.data.clients.find((c) => c.name === 'Elena Nueva');
+  assert.ok(elena, 'la encuentra aunque no la atendió');
+  assert.equal(elena.mine, false);
+  assert.equal(elena.phone, null);
+  assert.match(elena.phoneDisplay, /•/);
+  r = await mauri.get('/api/barber/clients');
+  assert.ok(!r.data.clients.some((c) => c.name === 'Elena Nueva'), 'sin buscar, solo los suyos');
+});
+
 test('seguridad: CSRF y freno a intentos', async () => {
   let r = await bruno.post('/api/client/logout', {}, { origin: 'https://otro-sitio.com' });
   assert.equal(r.status, 403);

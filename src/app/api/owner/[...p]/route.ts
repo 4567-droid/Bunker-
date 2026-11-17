@@ -5,6 +5,7 @@ import { dropImage, saveImage } from '@/lib/images';
 import { currentBusiness, forgetBusinessCache, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
 import { bool, fail, int, json, notFound, readBody, route, str, uuid, type Body } from '@/lib/http';
+import { clientMatch } from '@/lib/client-search';
 import { requireStaff } from '@/lib/session';
 import { addDays, dayLabel, isDay, isOpenDay, monthDays, monthLabel, toMin, type Hours, type Now } from '@/lib/time';
 
@@ -249,6 +250,9 @@ async function settings(tx: Tx, biz: Business) {
       bookingDays: b.booking_days,
       cancelLimitMin: b.cancel_limit_min,
       loyaltyGoal: b.loyalty_goal,
+      loyaltyReward: b.loyalty_reward ?? 'free',
+      loyaltyRewardPct: b.loyalty_reward_pct ?? 50,
+      loyaltyRewardText: b.loyalty_reward_text ?? '',
       doubleStampDays: b.double_stamp_days,
       referralPercent: b.referral_percent,
       monthlyGoal: b.monthly_goal,
@@ -275,8 +279,7 @@ interface ClientListRow {
 }
 
 async function clientList(tx: Tx, biz: Business, q: string, now: Now) {
-  const like = `%${q.replace(/[%_\\]/g, '')}%`;
-  const digits = q.replace(/\D/g, '');
+  const match = clientMatch(tx, q);
   return tx<ClientListRow[]>`
     select c.id, c.name, c.phone, c.email, c.stamps, c.visits, c.last_visit_on, c.created_at, c.source,
            (select count(*)::int from appointments a where a.client_id = c.id and a.status = 'no_show') as no_shows,
@@ -284,7 +287,7 @@ async function clientList(tx: Tx, biz: Business, q: string, now: Now) {
            (select min(a.day) from appointments a where a.client_id = c.id and a.status = 'booked' and a.day >= ${now.day}) as next_day
     from clients c
     where c.business_id = ${biz.id}
-      ${q ? tx`and (c.name ilike ${like} or c.email ilike ${like} ${digits.length >= 3 ? tx`or c.phone like ${'%' + digits + '%'}` : tx``})` : tx``}
+      ${match ? tx`and ${match}` : tx``}
     order by c.last_visit_on desc nulls last, c.created_at desc
     limit 500`;
 }
@@ -314,6 +317,19 @@ function httpsLink(b: Body, key: string, message: string): string | null {
   if ((u.protocol !== 'https:' && u.protocol !== 'http:') || !u.hostname.includes('.')) fail(400, message);
   u.protocol = 'https:';
   return u.toString();
+}
+
+/** Premio de la tarjeta: gratis, un % de descuento o un regalo (si no viene, queda el que estaba) */
+function parsePrize(b: Body, biz: Business) {
+  const kind = b.loyaltyReward === undefined ? biz.loyalty_reward : String(b.loyaltyReward);
+  if (kind !== 'free' && kind !== 'discount' && kind !== 'gift') fail(400, 'Elegí el premio de la tarjeta.');
+  const pct =
+    kind === 'discount' ? int(b, 'loyaltyRewardPct', { min: 5, max: 100, label: 'el descuento del premio' }) : biz.loyalty_reward_pct ?? 50;
+  const text =
+    kind === 'gift'
+      ? str(b, 'loyaltyRewardText', { min: 3, max: 60, label: 'el regalo (ej: una cera mate)' })
+      : optText(b, 'loyaltyRewardText', 60) ?? biz.loyalty_reward_text;
+  return { kind, pct, text };
 }
 
 const mpLink = (b: Body) => httpsLink(b, 'mpLink', 'Revisá el link de Mercado Pago (ej: https://link.mercadopago.com.ar/bunker).');
@@ -456,6 +472,7 @@ export const POST = route(async (req, path) => {
 
       case 'business': {
         const hours = body.hours !== undefined ? parseHours(body.hours) : biz.hours;
+        const prize = parsePrize(body, biz);
         const waRaw = optText(body, 'whatsapp', 30);
         const whatsapp = waRaw ? whatsappIntl(waRaw, areaFromWhatsapp(biz.whatsapp) ?? '362') : null;
         if (waRaw && !whatsapp) fail(400, 'Revisá el WhatsApp (ej: 362 449-3647).');
@@ -474,7 +491,10 @@ export const POST = route(async (req, path) => {
                    slot_step = ${int(body, 'slotStep', { min: 5, max: 120, label: 'el intervalo' })},
                    booking_days = ${int(body, 'bookingDays', { min: 1, max: 90, label: 'los días' })},
                    cancel_limit_min = ${int(body, 'cancelLimitMin', { min: 0, max: 2880, label: 'el aviso' })},
-                   loyalty_goal = ${int(body, 'loyaltyGoal', { min: 2, max: 50, label: 'los sellos' })},
+                   loyalty_goal = ${int(body, 'loyaltyGoal', { min: 2, max: 50, label: 'los cortes para el premio' })},
+                   loyalty_reward = ${prize.kind},
+                   loyalty_reward_pct = ${prize.pct},
+                   loyalty_reward_text = ${prize.text},
                    double_stamp_days = ${int(body, 'doubleStampDays', { min: 0, max: 365, label: 'los días del doble sello' })},
                    referral_percent = ${int(body, 'referralPercent', { min: 0, max: 100, label: 'el descuento' })}
                  where id = ${biz.id}`;

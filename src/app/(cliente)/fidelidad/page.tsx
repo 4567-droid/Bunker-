@@ -6,6 +6,7 @@ import { useApp, type Me } from '@/components/client/app-context';
 import { cleanCode } from '@/components/client/auth-fields';
 import { Card, ErrorNote, Field, Kicker, OkNote, PageTitle, PrimaryButton, StampGrid } from '@/components/ui';
 import { api } from '@/lib/api-client';
+import { prizeInfo } from '@/lib/rules';
 import { addDays, dayLabel } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 
@@ -13,13 +14,15 @@ export default function Fidelidad() {
   const { config, me } = useApp();
   const biz = config.business;
   const goal = biz.loyaltyGoal;
+  const prize = prizeInfo({ kind: biz.loyaltyReward, pct: biz.loyaltyRewardPct, text: biz.loyaltyRewardText, goal });
   const c = me?.client ?? null;
-  const stamps = c ? Math.min(c.stamps, goal - 1) : 6;
+  // Sin cuenta se muestra una tarjeta de ejemplo a medio llenar
+  const stamps = c ? Math.min(c.stamps, goal - 1) : Math.max(0, Math.min(6, goal - 2));
   const [origin, setOrigin] = useState('');
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   useEffect(() => setOrigin(window.location.origin), []);
 
-  const visitsToFree = Math.ceil((goal - 1 - 1) / 2) + 2; // 1 + 2 + 2… hasta llenar, y la siguiente gratis
+  const visitsToFree = Math.ceil((goal - 1 - 1) / 2) + 2; // 1 + 2 + 2… hasta llenar, y la siguiente tiene el premio
   const inviteUrl = c ? `${origin}/?ref=${c.referralCode}` : origin;
   const inviteText =
     `Te invito a ${biz.name}! Si nunca te cortaste ahí, tenemos ${biz.referralPercent}% de descuento cada uno ` +
@@ -31,21 +34,21 @@ export default function Fidelidad() {
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-7 pb-6">
-      <PageTitle kicker="Fidelidad" title={`El ${goal}.º corte es gratis`} />
+      <PageTitle kicker="Fidelidad" title={prize.title} />
 
       <Card className="gap-[18px] rounded-3xl p-[22px]">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-[13px] font-medium tracking-[.32em]">{biz.name.split(/\s+/)[0].toUpperCase()}</span>
           <span className="text-sm font-light text-muted">{c ? c.name : 'Ejemplo'}</span>
         </div>
-        <StampGrid stamps={stamps} goal={goal} />
+        <StampGrid stamps={stamps} goal={goal} prize={prize.cell} />
         <div className="flex justify-between gap-2.5 text-[15px]">
           <span className="font-medium">
             {stamps} de {goal} sellos
           </span>
-          <span className="font-light text-muted">El {goal}.º es gratis</span>
+          <span className="font-light text-muted">Premio en el {goal}.º</span>
         </div>
-        {c?.nextFree && <span className="text-[15px] font-medium text-accent">Tarjeta llena: tu próximo corte es gratis.</span>}
+        {c?.nextFree && <span className="text-[15px] font-medium text-accent">Tarjeta llena: {prize.next.charAt(0).toLowerCase() + prize.next.slice(1)}.</span>}
         {!c && (
           <Link href="/cuenta" className="flex min-h-[52px] items-center justify-center rounded-full bg-accent text-base font-semibold text-bg">
             Crear mi tarjeta
@@ -58,7 +61,7 @@ export default function Fidelidad() {
           <span className="text-[13px] font-semibold tracking-[.18em]">PROMO DEL MES</span>
           <span className="text-2xl font-bold">Doble sello</span>
           <span className="text-[15px]">
-            Si volvés antes de {biz.doubleStampDays} días, ese corte suma 2 sellos. Llegás al gratis en {visitsToFree} visitas.
+            Si volvés antes de {biz.doubleStampDays} días, ese corte suma 2 sellos. Llegás al premio en {visitsToFree} visitas.
           </span>
           {doubleUntil && doubleUntil >= config.today && (
             <span className="text-sm font-semibold">Tu doble sello vale hasta el {dayLabel(doubleUntil).toLowerCase()}.</span>

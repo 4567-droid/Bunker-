@@ -29,6 +29,9 @@ export interface Business {
   min_advance_min: number;
   cancel_limit_min: number;
   loyalty_goal: number;
+  loyalty_reward: 'free' | 'discount' | 'gift';
+  loyalty_reward_pct: number;
+  loyalty_reward_text: string | null;
   double_stamp_days: number;
   referral_percent: number;
   monthly_goal: number;
@@ -37,8 +40,13 @@ export interface Business {
 export const BIZ_COOKIE = 'bk_biz';
 export const BIZ_HEADER = 'x-bk-biz';
 
-const memo = new Map<string, { at: number; biz: Business }>();
-const TTL = 30_000;
+// Memoria corta del negocio. Va en globalThis para que la compartan la web y la API (Next arma
+// paquetes separados): así, cuando el dueño guarda Ajustes, se borra para todos al mismo tiempo.
+declare global {
+  var __bunkerBizMemo: Map<string, { at: number; biz: Business }> | undefined;
+}
+const memo = (globalThis.__bunkerBizMemo ??= new Map<string, { at: number; biz: Business }>());
+const TTL = 10_000;
 
 export function forgetBusinessCache(): void {
   memo.clear();
@@ -49,7 +57,7 @@ export function forgetBusinessCache(): void {
  * 1) el que tiene cargado este dominio (bunkerbarberclub.com.ar)
  * 2) si el dominio no es de nadie (ej. *.vercel.app o localhost): el elegido con ?negocio=slug
  * 3) DEFAULT_BUSINESS_SLUG, o el primero que se cargó
- * Todo en una sola consulta, y se recuerda 30 segundos (cada ida a la base suma demora).
+ * Todo en una sola consulta, y se recuerda 10 segundos (cada ida a la base suma demora).
  */
 export const currentBusiness = cache(async (): Promise<Business> => {
   const h = await headers();
@@ -101,8 +109,16 @@ export function publicBusiness(b: Business) {
     bookingDays: b.booking_days,
     cancelLimitMin: b.cancel_limit_min,
     loyaltyGoal: b.loyalty_goal,
+    loyaltyReward: b.loyalty_reward ?? 'free',
+    loyaltyRewardPct: b.loyalty_reward_pct ?? 50,
+    loyaltyRewardText: b.loyalty_reward_text ?? null,
     doubleStampDays: b.double_stamp_days,
     referralPercent: b.referral_percent,
   };
 }
 export type PublicBusiness = ReturnType<typeof publicBusiness>;
+
+/** Premio de la tarjeta del negocio (para prizeInfo) */
+export function bizPrize(b: Business) {
+  return { kind: b.loyalty_reward ?? 'free', pct: b.loyalty_reward_pct ?? 50, text: b.loyalty_reward_text ?? null, goal: b.loyalty_goal };
+}

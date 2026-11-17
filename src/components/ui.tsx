@@ -27,6 +27,7 @@ export const ICONS = {
   whatsapp: 'M3.5 20.5l1.3-4A8.5 8.5 0 1 1 8 19.6zM9.2 8.4c-.2 1.4.5 3 1.9 4.4s3 2.1 4.4 1.9l.7-1.4-1.9-1-.9.9c-.8-.4-1.6-1.2-2-2l.9-.9-1-1.9z',
   calendar: 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4',
   pin: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
   instagram: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17.5 6.5h.01',
   close: 'M6 6l12 12M18 6L6 18',
 } as const;
@@ -272,6 +273,7 @@ export function Field({
   inputMode,
   placeholder,
   id,
+  autoFocus,
 }: {
   label: string;
   value: string;
@@ -281,6 +283,7 @@ export function Field({
   inputMode?: 'text' | 'tel' | 'email' | 'numeric';
   placeholder?: string;
   id: string;
+  autoFocus?: boolean;
 }) {
   return (
     <>
@@ -295,6 +298,7 @@ export function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? label}
+        autoFocus={autoFocus}
         className="min-h-[54px] w-full rounded-[14px] border border-line bg-field px-[18px] text-base text-ink placeholder:text-dim"
       />
     </>
@@ -319,8 +323,8 @@ export function OkNote({ text }: { text: string | null }) {
   );
 }
 
-/** Tarjeta de sellos: los sellados en amarillo con tilde; la última dice "Gratis" */
-export function StampGrid({ stamps, goal, mini = false }: { stamps: number; goal: number; mini?: boolean }) {
+/** Tarjeta de sellos: los sellados en amarillo con tilde; la última muestra el premio ("Gratis", "50%", "Premio") */
+export function StampGrid({ stamps, goal, mini = false, prize = 'Gratis' }: { stamps: number; goal: number; mini?: boolean; prize?: string }) {
   const filled = Math.min(stamps, goal - 1);
   const cells = Array.from({ length: goal }, (_, i) => i);
   if (mini) {
@@ -348,7 +352,7 @@ export function StampGrid({ stamps, goal, mini = false }: { stamps: number; goal
             {stamped ? (
               <Icon name="check" size={20} stroke={3.5} className="w-[44%] text-bg" />
             ) : (
-              <span className={free ? 'text-accent' : 'text-faint'}>{free ? 'Gratis' : i + 1}</span>
+              <span className={free ? 'text-accent' : 'text-faint'}>{free ? prize : i + 1}</span>
             )}
           </div>
         );
