@@ -132,11 +132,11 @@ export default function Cuenta() {
     await Promise.all([refreshMe(), refreshLive()]);
   }
 
-  if (!me) return <div className="px-5 pt-10 text-muted">Cargando…</div>;
+  if (!me) return <div className="mx-auto w-full max-w-[480px] px-5 pt-10 text-muted">Cargando…</div>;
 
   if (!c) {
     return (
-      <div className="flex flex-col gap-3.5 px-4 pt-7 pb-6">
+      <div className="mx-auto flex w-full max-w-[480px] flex-col gap-3.5 px-4 pt-7 pb-6">
         <div className="flex flex-col gap-1 px-1">
           <Kicker>Mi cuenta</Kicker>
           <h1 className="m-0 text-[28px] font-semibold">{mode === 'register' ? 'Creá tu cuenta' : 'Ingresá'}</h1>
@@ -155,7 +155,7 @@ export default function Cuenta() {
 
   const next = me.upcoming ?? [];
   return (
-    <div className="flex flex-col gap-3.5 px-4 pt-7 pb-6">
+    <div className="mx-auto flex w-full max-w-[480px] flex-col gap-3.5 px-4 pt-7 pb-6">
       <OkNote text={notice} />
       <Card className="flex-row items-center gap-3.5 px-5 py-[18px]">
         <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-accent text-[22px] font-semibold text-bg">

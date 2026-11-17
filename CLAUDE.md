@@ -221,5 +221,12 @@ Premio de la tarjeta y búsqueda (migración `005_premio_tarjeta.sql`):
   Resumen. El barbero busca entre todos los clientes del local, pero el teléfono y el correo completos solo los ve de
   los que atendió él.
 
+Vista en PC (pantallas de 768 px o más; en el celular no cambia nada):
+
+- Menú arriba con la marca y "Sacar turno" (`ClientNav` en `app-context.tsx`); en el celular sigue abajo.
+- Inicio: portada a lo ancho; en 1024 px o más, la tarjeta "Reservá tu turno" va al lado del título y las demás
+  tarjetas en columnas. Cada página define su ancho (la columna de 480 px ya no está en el layout).
+- Globo de WhatsApp en la esquina de la pantalla; productos en grilla.
+
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

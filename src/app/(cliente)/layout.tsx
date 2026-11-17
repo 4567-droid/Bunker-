@@ -36,7 +36,7 @@ export default async function ClienteLayout({ children }: { children: ReactNode 
     <ClientApp config={config}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData(config) }} />
       <div className="flex min-h-dvh flex-col bg-bg text-ink">
-        <div className="mx-auto w-full max-w-[480px] flex-1">{children}</div>
+        <div className="w-full flex-1">{children}</div>
         <WaBubble />
         <ClientNav />
       </div>

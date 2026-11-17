@@ -374,14 +374,16 @@ export function BottomNav({
   active,
   onPick,
   maxWidth = 480,
+  className = '',
 }: {
   tabs: NavTab[];
   active: string;
   onPick?: (id: string) => void;
   maxWidth?: number;
+  className?: string;
 }) {
   return (
-    <nav aria-label="Menú" className="sticky bottom-0 z-10 border-t border-field bg-hero pb-[env(safe-area-inset-bottom)]">
+    <nav aria-label="Menú" className={`sticky bottom-0 z-10 border-t border-field bg-hero pb-[env(safe-area-inset-bottom)] ${className}`}>
       <div className="mx-auto grid" style={{ maxWidth, gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
         {tabs.map((t) => {
           const on = t.id === active;

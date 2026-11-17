@@ -16,10 +16,11 @@ export default function Productos() {
     setDraft({ productIds: chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id] });
 
   return (
-    <div className="flex flex-col gap-3 px-4 pt-7 pb-6">
+    <div className="mx-auto flex w-full max-w-[480px] flex-col gap-3 px-4 pt-7 pb-6 md:max-w-[1080px] md:px-10">
       <PageTitle kicker="Productos" title="Para tu peinado en casa" sub="Sumalos a tu turno y los pagás en el local." />
       <div className="h-1" />
       {config.products.length === 0 && <span className="px-1 text-muted">Pronto vas a ver los productos acá.</span>}
+      <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-4 lg:grid-cols-3">
       {config.products.map((p) => {
         const on = chosen.includes(p.id);
         return (
@@ -52,8 +53,9 @@ export default function Productos() {
           </article>
         );
       })}
+      </div>
       {chosen.length > 0 && (
-        <Link href="/turno" className="mt-2 flex min-h-14 items-center justify-center rounded-full bg-accent text-[17px] font-semibold text-bg">
+        <Link href="/turno" className="mt-2 flex min-h-14 md:mx-auto md:w-full md:max-w-[420px] items-center justify-center rounded-full bg-accent text-[17px] font-semibold text-bg">
           Seguir con mi turno →
         </Link>
       )}

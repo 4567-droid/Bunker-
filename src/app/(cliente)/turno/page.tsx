@@ -213,7 +213,7 @@ export default function Turno() {
       (prodNames.length ? ` Quiero sumar: ${prodNames.join(', ')}.` : '');
     const wa = biz.whatsapp ? enviarWhatsApp({ to: biz.whatsapp, text }).url : null;
     return (
-      <div className="flex flex-col gap-[18px] px-4 pt-7 pb-6">
+      <div className="mx-auto flex w-full max-w-[480px] flex-col gap-[18px] px-4 pt-7 pb-6">
         <section className="fade-in flex flex-col gap-3.5 rounded-3xl border border-accent bg-card p-6">
           <Kicker>{waSent || !wa ? 'Listo' : 'Último paso'}</Kicker>
           <span className="text-[30px] leading-[1.1] font-semibold">{waSent || !wa ? 'Turno reservado' : 'Confirmalo por WhatsApp'}</span>
@@ -312,7 +312,7 @@ export default function Turno() {
     else reserve();
   }
   return (
-    <div className="flex flex-col gap-[18px] px-4 pt-7 pb-6">
+    <div className="mx-auto flex w-full max-w-[480px] flex-col gap-[18px] px-4 pt-7 pb-6">
       <div className="flex flex-col gap-2.5 px-1">
         <Kicker>Paso {step} de 5</Kicker>
         <h1 className="m-0 text-[28px] font-semibold">{TITLES[step]}</h1>
@@ -490,8 +490,7 @@ export default function Turno() {
 
       {/* Atrás / Siguiente quedan siempre a mano, arriba del menú */}
       <div
-        className="sticky z-10 -mx-4 flex flex-col gap-2.5 bg-gradient-to-t from-bg from-70% to-transparent px-4 pt-4 pb-3"
-        style={{ bottom: 'calc(69px + env(safe-area-inset-bottom))' }}
+        className="sticky bottom-[calc(69px+env(safe-area-inset-bottom))] z-10 -mx-4 flex flex-col gap-2.5 bg-gradient-to-t from-bg from-70% to-transparent px-4 pt-4 pb-3 md:bottom-0"
       >
         <ErrorNote text={error} />
         <div className="grid grid-cols-[1fr_2fr] gap-2.5">

@@ -5,7 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api, storage } from '@/lib/api-client';
 import type { Payment } from '@/lib/format';
 import type { PublicConfig } from '@/lib/public-config';
-import { BottomNav, type NavTab } from '@/components/ui';
+import Link from 'next/link';
+import { BottomNav, Icon, Scissors, type NavTab } from '@/components/ui';
 
 export interface Appt {
   id: string;
@@ -241,5 +242,44 @@ const TABS: NavTab[] = [
 
 export function ClientNav() {
   const path = usePathname();
-  return <BottomNav tabs={TABS} active={path} />;
+  const { config } = useApp();
+  const short = config.business.name.split(/\s+/)[0].toUpperCase();
+  return (
+    <>
+      {/* PC: barra arriba con la marca, el menú y "Sacar turno" */}
+      <header className="sticky top-0 z-30 order-first hidden border-b border-field bg-hero/95 backdrop-blur md:block">
+        <div className="mx-auto flex h-16 max-w-[1080px] items-center gap-4 px-10 lg:gap-6">
+          <Link href="/" className="flex items-center gap-3" aria-label="Inicio">
+            <Scissors size={26} />
+            <span className="text-sm font-medium tracking-[.32em]">{short}</span>
+          </Link>
+          <nav aria-label="Menú" className="flex flex-1 items-center justify-center gap-1">
+            {TABS.map((t) => {
+              const on = t.id === path;
+              return (
+                <Link
+                  key={t.id}
+                  href={t.href ?? '/'}
+                  aria-current={on ? 'page' : undefined}
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-full px-3 text-sm whitespace-nowrap lg:px-4 ${on ? 'font-semibold text-accent' : 'text-muted hover:text-ink'}`}
+                >
+                  <Icon name={t.icon} size={18} />
+                  {t.label}
+                </Link>
+              );
+            })}
+          </nav>
+          {path !== '/turno' ? (
+            <Link href="/turno" className="hidden min-h-10 items-center rounded-full bg-accent px-5 text-sm font-semibold whitespace-nowrap text-bg lg:inline-flex">
+              Sacar turno
+            </Link>
+          ) : (
+            <span className="hidden w-[118px] lg:block" />
+          )}
+        </div>
+      </header>
+      {/* Celular: menú fijo abajo */}
+      <BottomNav tabs={TABS} active={path} className="md:hidden" />
+    </>
+  );
 }

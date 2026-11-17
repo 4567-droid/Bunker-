@@ -33,7 +33,7 @@ export default function Fidelidad() {
   const doubleUntil = c?.lastVisitOn && biz.doubleStampDays ? addDays(c.lastVisitOn, biz.doubleStampDays) : null;
 
   return (
-    <div className="flex flex-col gap-4 px-4 pt-7 pb-6">
+    <div className="mx-auto flex w-full max-w-[480px] flex-col gap-4 px-4 pt-7 pb-6">
       <PageTitle kicker="Fidelidad" title={prize.title} />
 
       <Card className="gap-[18px] rounded-3xl p-[22px]">

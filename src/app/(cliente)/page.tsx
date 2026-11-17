@@ -11,7 +11,7 @@ import { addDays, dayLabel, hoursSummary } from '@/lib/time';
 
 function ChairArt() {
   return (
-    <svg width="300" height="420" viewBox="0 0 300 420" aria-hidden="true" className="absolute top-10 -right-[70px] opacity-55">
+    <svg width="300" height="420" viewBox="0 0 300 420" aria-hidden="true" className="absolute top-10 -right-[70px] opacity-55 md:hidden">
       <g fill="none" stroke="#2E2E2A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
         <path d="M150 0 v70" />
         <path d="M110 70 h80 l18 30 h-116 z" />
@@ -54,10 +54,53 @@ export default function Inicio() {
   const doubleUntil = lastVisit && biz.doubleStampDays ? addDays(lastVisit, biz.doubleStampDays) : null;
   const doubleOn = !!doubleUntil && doubleUntil >= config.today;
 
+  // Estas dos tarjetas van debajo de la portada en el celular y al lado del título en la PC
+  const nextCard = (className: string) =>
+    nextAppt && (
+      <Link href="/cuenta" className={`flex items-center justify-between gap-3 rounded-[20px] border border-accent bg-card px-5 py-4 ${className}`}>
+        <span className="flex min-w-0 flex-col">
+          <span className="text-[13px] font-light text-muted">{nextAppt.status === 'in_progress' ? 'Te están atendiendo' : 'Tu próximo turno'}</span>
+          <span className="text-lg font-semibold">
+            {nextAppt.dayLabel} · {nextAppt.projectedTime ?? nextAppt.time}
+          </span>
+          <span className="truncate text-sm font-light text-muted">
+            {nextAppt.serviceName} con {nextAppt.barberName}
+            {nextAppt.projectedTime ? ` · se corrió de las ${nextAppt.time}` : ''}
+          </span>
+        </span>
+        <span className="shrink-0 text-sm text-accent">Ver →</span>
+      </Link>
+    );
+  const bookingCard = (className: string) => (
+    <section className={`relative flex flex-col gap-3 rounded-3xl border border-line bg-card p-[22px] ${className}`}>
+      <div className="mb-1.5 flex items-center gap-4">
+        <Icon name="calendar" size={40} stroke={1.6} className="text-accent" />
+        <span className="flex flex-col">
+          <span className="text-[22px] font-semibold">Reservá tu turno</span>
+          <span className="text-sm font-light text-muted">Elegí corte, horario y barbero.</span>
+        </span>
+      </div>
+      {rows.map((r) => (
+        <button
+          key={r.label}
+          type="button"
+          onClick={() => router.push(`/turno?paso=${r.step}`)}
+          className="flex min-h-14 items-center gap-3.5 rounded-[14px] border-0 bg-field px-4 text-left text-base text-soft"
+        >
+          <span className="flex-1">{r.label}</span>
+          <Icon name="chevron" size={18} stroke={2} className="text-muted" />
+        </button>
+      ))}
+      <Link href="/turno" className="mt-1.5 flex min-h-14 items-center justify-center rounded-full bg-accent text-[17px] font-semibold text-bg">
+        Sacar turno →
+      </Link>
+    </section>
+  );
+
   return (
     <div className="flex flex-col">
       <section
-        className="relative overflow-hidden bg-hero px-6 pt-6 pb-[120px]"
+        className="relative overflow-hidden bg-hero px-6 pt-6 pb-[120px] md:px-10 md:pt-16 md:pb-20"
         style={
           biz.heroUrl
             ? { backgroundImage: `linear-gradient(180deg, rgba(14,14,13,.55), rgba(14,14,13,.92)), url("${encodeURI(biz.heroUrl)}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -65,81 +108,57 @@ export default function Inicio() {
         }
       >
         {!biz.heroUrl && <ChairArt />}
-        <div className="relative flex items-center justify-between">
-          <span className="flex items-center gap-3">
-            <Scissors />
-            <span className="text-sm font-medium tracking-[.32em]">{short.toUpperCase()}</span>
-          </span>
-          {wa && (
-            <a href={wa} target="_blank" rel="noopener noreferrer" aria-label="Escribir por WhatsApp" className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-line-2">
-              <Icon name="whatsapp" size={20} />
-            </a>
-          )}
-        </div>
-        <div className="relative mt-[84px] flex flex-col gap-1.5">
-          <h1 className="m-0 flex flex-col leading-[1.05]">
-            <span className="text-[clamp(38px,11vw,48px)] font-bold tracking-[.02em]">TU ESTILO,</span>
-            <span className="text-[clamp(34px,10vw,44px)] font-light tracking-[.16em] text-muted">NUESTRA</span>
-            <span className="text-[clamp(34px,10vw,44px)] font-light tracking-[.16em] text-muted">PASIÓN.</span>
-          </h1>
-          <span className="mt-[18px] mb-3 h-[3px] w-12 bg-accent" />
-          <span className="text-[17px] font-light text-soft">
-            Cortes de calidad,
-            <br />
-            con atención personalizada.
-          </span>
+        <div className="relative mx-auto w-full max-w-[1000px] lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center lg:gap-14">
+          <div>
+            <div className="relative flex items-center justify-between md:hidden">
+              <span className="flex items-center gap-3">
+                <Scissors />
+                <span className="text-sm font-medium tracking-[.32em]">{short.toUpperCase()}</span>
+              </span>
+              {wa && (
+                <a href={wa} target="_blank" rel="noopener noreferrer" aria-label="Escribir por WhatsApp" className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-line-2">
+                  <Icon name="whatsapp" size={20} />
+                </a>
+              )}
+            </div>
+            <div className="relative mt-[84px] flex flex-col gap-1.5 md:mt-0">
+              <h1 className="m-0 flex flex-col leading-[1.05]">
+                <span className="text-[clamp(38px,11vw,48px)] font-bold tracking-[.02em] md:text-[68px]">TU ESTILO,</span>
+                <span className="text-[clamp(34px,10vw,44px)] font-light tracking-[.16em] text-muted md:text-[60px]">NUESTRA</span>
+                <span className="text-[clamp(34px,10vw,44px)] font-light tracking-[.16em] text-muted md:text-[60px]">PASIÓN.</span>
+              </h1>
+              <span className="mt-[18px] mb-3 h-[3px] w-12 bg-accent md:mt-6 md:w-16" />
+              <span className="text-[17px] font-light text-soft md:text-xl">
+                Cortes de calidad,
+                <br />
+                con atención personalizada.
+              </span>
+              {where && <span className="mt-4 hidden text-[15px] font-light text-muted md:block">{where}</span>}
+            </div>
+          </div>
+          <div className="hidden md:mt-10 md:flex md:max-w-[520px] md:flex-col md:gap-4 lg:mt-0 lg:max-w-none">
+            {nextCard('')}
+            {bookingCard('')}
+          </div>
         </div>
       </section>
 
-      {nextAppt && (
-        <Link href="/cuenta" className="relative z-[1] mx-4 -mt-[84px] flex items-center justify-between gap-3 rounded-[20px] border border-accent bg-card px-5 py-4">
-          <span className="flex min-w-0 flex-col">
-            <span className="text-[13px] font-light text-muted">{nextAppt.status === 'in_progress' ? 'Te están atendiendo' : 'Tu próximo turno'}</span>
-            <span className="text-lg font-semibold">
-              {nextAppt.dayLabel} · {nextAppt.projectedTime ?? nextAppt.time}
-            </span>
-            <span className="truncate text-sm font-light text-muted">
-              {nextAppt.serviceName} con {nextAppt.barberName}
-              {nextAppt.projectedTime ? ` · se corrió de las ${nextAppt.time}` : ''}
-            </span>
-          </span>
-          <span className="shrink-0 text-sm text-accent">Ver →</span>
-        </Link>
-      )}
+      {/* Celular: las tarjetas se montan sobre la portada */}
+      <div className="flex flex-col md:hidden">
+        {nextCard('relative z-[1] mx-4 -mt-[84px]')}
+        {bookingCard(`mx-4 ${nextAppt ? 'mt-4' : '-mt-[84px]'}`)}
+      </div>
 
-      <section className={`relative mx-4 flex flex-col gap-3 rounded-3xl border border-line bg-card p-[22px] ${nextAppt ? 'mt-4' : '-mt-[84px]'}`}>
-        <div className="mb-1.5 flex items-center gap-4">
-          <Icon name="calendar" size={40} stroke={1.6} className="text-accent" />
-          <span className="flex flex-col">
-            <span className="text-[22px] font-semibold">Reservá tu turno</span>
-            <span className="text-sm font-light text-muted">Elegí corte, horario y barbero.</span>
-          </span>
-        </div>
-        {rows.map((r) => (
-          <button
-            key={r.label}
-            type="button"
-            onClick={() => router.push(`/turno?paso=${r.step}`)}
-            className="flex min-h-14 items-center gap-3.5 rounded-[14px] border-0 bg-field px-4 text-left text-base text-soft"
-          >
-            <span className="flex-1">{r.label}</span>
-            <Icon name="chevron" size={18} stroke={2} className="text-muted" />
-          </button>
-        ))}
-        <Link href="/turno" className="mt-1.5 flex min-h-14 items-center justify-center rounded-full bg-accent text-[17px] font-semibold text-bg">
-          Sacar turno →
-        </Link>
-      </section>
-
+      <div className="mx-auto flex w-full max-w-[1080px] flex-col md:mt-10 md:grid md:grid-cols-2 md:items-start md:gap-4 md:px-10 lg:grid-cols-3">
       {referral && me?.client && me.invite?.canUse && referral.code !== me.client.referralCode && (
-        <Link href="/fidelidad" className="mx-4 mt-4 flex flex-col gap-1 rounded-[20px] border border-accent px-5 py-[18px]">
+        <Link href="/fidelidad" className="mx-4 mt-4 flex flex-col gap-1 rounded-[20px] border border-accent px-5 py-[18px] md:mx-0 md:mt-0">
           <span className="text-[17px] font-semibold">{referral.name} te invitó</span>
           <span className="text-sm font-light text-muted">Tocá acá para usar su código: {referral.percent}% en tu primer corte.</span>
         </Link>
       )}
 
       {referral && !me?.client && (
-        <Link href="/cuenta" className="mx-4 mt-4 flex flex-col gap-1 rounded-[20px] border border-accent px-5 py-[18px]">
+        <Link href="/cuenta" className="mx-4 mt-4 flex flex-col gap-1 rounded-[20px] border border-accent px-5 py-[18px] md:mx-0 md:mt-0">
           <span className="text-[17px] font-semibold">{referral.name} te invitó</span>
           <span className="text-sm font-light text-muted">
             Tenés {referral.percent}% de descuento en tu primer corte. Creá tu cuenta y reservá.
@@ -147,7 +166,7 @@ export default function Inicio() {
         </Link>
       )}
 
-      <Card className="mx-4 mt-4 gap-3 px-5 py-[18px]">
+      <Card className="mx-4 mt-4 gap-3 px-5 py-[18px] md:mx-0 md:mt-0">
         <Kicker>Ahora en el local</Kicker>
         {!live ? (
           <span className="text-sm font-light text-muted">Cargando…</span>
@@ -190,7 +209,7 @@ export default function Inicio() {
         )}
       </Card>
 
-      <Link href="/fidelidad" className="mx-4 mt-4 flex items-center justify-between gap-3 rounded-[20px] border border-accent px-5 py-[18px] text-left">
+      <Link href="/fidelidad" className="mx-4 mt-4 flex items-center justify-between gap-3 rounded-[20px] border border-accent px-5 py-[18px] text-left md:mx-0 md:mt-0">
         <span className="flex flex-col">
           <span className="text-[17px] font-semibold">Tarjeta de fidelidad</span>
           <span className="text-sm font-light text-muted">
@@ -207,7 +226,7 @@ export default function Inicio() {
       </Link>
 
       {(where || hours.length > 0) && (
-        <Card className="mx-4 mt-4 gap-3 px-5 py-[18px]">
+        <Card className="mx-4 mt-4 gap-3 px-5 py-[18px] md:mx-0 md:mt-0">
           <Kicker>Dónde estamos</Kicker>
           {where && <span className="text-[17px] font-medium">{where}</span>}
           {hours.length > 0 && (
@@ -240,7 +259,9 @@ export default function Inicio() {
         </Card>
       )}
 
-      <footer className="mx-6 mt-6 mb-6 flex flex-col gap-1 text-[13px] font-light text-dim">
+      </div>
+
+      <footer className="mx-6 mt-6 mb-6 flex flex-col gap-1 text-[13px] font-light text-dim md:mx-auto md:mt-10 md:w-full md:max-w-[1080px] md:px-10">
         <span>
           {biz.name}
           {ig ? ` · @${ig}` : ''}
