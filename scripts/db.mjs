@@ -181,7 +181,7 @@ async function seed({ demo }) {
       insert into businesses (slug, name, kind, domain, status, accent, logo_url, whatsapp, instagram,
                               address, city, maps_url, hours, theme)
       values ('bunker', 'Bunker Barber Club', 'Barbería', ${process.env.SEED_DOMAIN || null}, 'activo',
-              '#F5C400', '/brand/bunker-badge.png', '5493624493647', 'bunkerbarberclub',
+              '#F5C400', '/brand/bunker-badge.png', '5493624208452', 'bunkerbarberclub',
               'Calle Isabel la Católica', 'H3506 Resistencia, Chaco',
               'https://www.google.com/maps/search/?api=1&query=Isabel+la+Cat%C3%B3lica%2C+H3506+Resistencia%2C+Chaco',
               ${tx.json(BUNKER_HOURS)}, 'moderno')

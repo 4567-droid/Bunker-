@@ -238,7 +238,7 @@ async function settings(tx: Tx, biz: Business) {
       name: b.name,
       address: b.address,
       city: b.city,
-      // En Ajustes se ve como lo escribe cualquiera: 362 449-3647
+      // En Ajustes se ve como lo escribe cualquiera: 362 412-3456
       whatsapp: b.whatsapp && /^549\d{10}$/.test(b.whatsapp) ? phoneDisplay(b.whatsapp.slice(3)) : b.whatsapp,
       instagram: b.instagram,
       mapsUrl: b.maps_url,
@@ -475,7 +475,7 @@ export const POST = route(async (req, path) => {
         const prize = parsePrize(body, biz);
         const waRaw = optText(body, 'whatsapp', 30);
         const whatsapp = waRaw ? whatsappIntl(waRaw, areaFromWhatsapp(biz.whatsapp) ?? '362') : null;
-        if (waRaw && !whatsapp) fail(400, 'Revisá el WhatsApp (ej: 362 449-3647).');
+        if (waRaw && !whatsapp) fail(400, 'Revisá el WhatsApp (ej: 362 412-3456).');
         const igRaw = optText(body, 'instagram', 200);
         const instagram = igRaw ? instagramHandle(igRaw) : null;
         if (igRaw && !instagram) fail(400, 'Revisá el Instagram: pegá el link del perfil o escribí el usuario (ej: bunkerbarberclub).');

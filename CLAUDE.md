@@ -8,7 +8,8 @@ Este archivo explica todo el proyecto. Leelo completo antes de programar y respe
 - Cliente: **Bunker Barber Club** (Instagram @bunkerbarberclub, "since 2019"), Resistencia, Chaco.
 - Barberos: **Mauri** e **Iván**.
 - Hoy atienden por orden de llegada. El sistema suma turnos online **sin sacar la fila** de los que llegan sin turno.
-- WhatsApp de la barbería: **+54 9 362 449-3647** (`wa.me/5493624493647`). Cambiado el 17/11/2026 (antes figuraba 362 549-3647).
+- WhatsApp de la barbería: **+54 9 362 420-8452** (`wa.me/5493624208452`). Cambiado el 17/11/2026 (migración 010;
+  antes 362 449-3647 y, al principio, 362 549-3647). El dueño también lo puede cambiar en Central → Ajustes.
 - Instagram: https://www.instagram.com/bunkerbarberclub · Dirección: Calle Isabel la Católica, H3506 Resistencia, Chaco.
 - Más adelante el mismo código tiene que servir para otros negocios (otras barberías, uñas, consultorios): cada negocio con su nombre, colores, logo y dominio, todos manejados desde un panel de administrador.
 

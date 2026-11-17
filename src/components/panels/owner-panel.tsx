@@ -849,7 +849,7 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
       <Section title="Datos del negocio">
         <Small label="Dirección" value={biz.address ?? ''} onChange={(v) => set({ address: v })} placeholder="Ej: Av. Sarmiento 1234" />
         <Small label="Ciudad" value={biz.city ?? ''} onChange={(v) => set({ city: v })} />
-        <Small label="WhatsApp de la barbería" value={biz.whatsapp ?? ''} onChange={(v) => set({ whatsapp: v })} placeholder="362 449-3647" />
+        <Small label="WhatsApp de la barbería" value={biz.whatsapp ?? ''} onChange={(v) => set({ whatsapp: v })} placeholder="Ej: 362 412-3456" />
         <Small label="Instagram (usuario o link del perfil)" value={biz.instagram ?? ''} onChange={(v) => set({ instagram: v })} placeholder="bunkerbarberclub" />
         <Small label="Link de Google Maps (opcional: si lo dejás vacío se arma con la dirección)" value={biz.mapsUrl ?? ''} onChange={(v) => set({ mapsUrl: v })} placeholder="https://maps.app.goo.gl/..." />
         <Small label="Alias para transferencias" value={biz.transferAlias ?? ''} onChange={(v) => set({ transferAlias: v })} />
