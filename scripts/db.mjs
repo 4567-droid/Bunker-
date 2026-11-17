@@ -50,9 +50,11 @@ function normalizeDbUrl(raw, fallbackPassword = '') {
   const m = /^(postgres(?:ql)?:\/\/)([^:@/]+)(?::([^@/]*))?@(.+)$/i.exec(s);
   if (m) {
     const pass = m[3] ?? '';
-    if (!isPlaceholder(pass)) return s;
-    if (!fb) throw new Error(SIN_CLAVE);
-    return `${m[1]}${m[2]}:${encodeURIComponent(fb)}@${m[4]}`;
+    if (pass && !isPlaceholder(pass)) return s;
+    // Sin contraseña en la dirección: se usa la de aparte; si no hay, se deja igual (bases locales sin clave)
+    if (fb) return `${m[1]}${m[2]}:${encodeURIComponent(fb)}@${m[4]}`;
+    if (pass) throw new Error(SIN_CLAVE);
+    return s;
   }
   if (/^postgres(ql)?:\/\//i.test(s)) return s;
   const kv = {};
@@ -319,13 +321,90 @@ async function seedDemo(tx, biz) {
   console.log(`Demo: ${clients.length} clientes, ${n} cortes del mes, turnos de hoy y mañana, gastos, fila y un bloqueo.`);
 }
 
+// ---------------------------------------------------------------------
+// Chequeo de permisos: hace en la base real lo mismo que la web al registrar un cliente y
+// reservar, con el mismo rol (bunker_app), y al final DESHACE todo. No guarda ni cambia datos.
+// ---------------------------------------------------------------------
+class Deshacer extends Error {}
+
+async function check() {
+  const slug = process.env.DEFAULT_BUSINESS_SLUG || 'bunker';
+  const [biz] = await sql`select id from businesses where slug = ${slug}`;
+  if (!biz) {
+    console.log(`Chequeo: no hay negocio "${slug}" todavía.`);
+    return true;
+  }
+  let ok = true;
+  const step = async (name, fn) => {
+    try {
+      const r = await fn();
+      console.log(`  ✔ ${name}`);
+      return r;
+    } catch (e) {
+      ok = false;
+      console.log(`  ✘ ${name}: ${e.code ? `[${e.code}] ` : ''}${e.message}`);
+      throw new Deshacer();
+    }
+  };
+  console.log('Chequeo de permisos (se deshace al final):');
+  try {
+    await sql.begin(async (tx) => {
+      await step('entrar como la web (rol bunker_app)', () => tx`
+        select set_config('app.business_id', ${biz.id}, true), set_config('app.is_admin', 'off', true),
+               set_config('role', 'bunker_app', true)`);
+      const [svc] = await step('leer servicios', () => tx`select id, name, duration_min, price from services where business_id = ${biz.id} and active limit 1`);
+      const [bar] = await step('leer barberos', () => tx`select id from staff where business_id = ${biz.id} and role = 'barber' and active limit 1`);
+      await step('leer bloqueos y turnos', () => tx`select (select count(*) from blocks) as b, (select count(*) from appointments) as a`);
+      const [cl] = await step('crear cliente', () => tx`
+        insert into clients (business_id, name, phone, referral_code)
+        values (${biz.id}, 'Chequeo Automático', '3620000001', 'CHEQ01') returning id`);
+      await step('candado del día', () => tx`select pg_advisory_xact_lock(hashtext('bk:chequeo'))`);
+      if (svc && bar) {
+        await step('reservar turno', () => tx`
+          insert into appointments (business_id, client_id, client_name, client_phone, barber_id, service_id, service_name,
+                                    duration_min, day, start_min, end_min, source, payment, price, final_price)
+          values (${biz.id}, ${cl.id}, 'Chequeo Automático', '3620000001', ${bar.id}, ${svc.id}, ${svc.name},
+                  ${svc.duration_min}, current_date + 400, 1380, ${1380 + svc.duration_min}, 'web', 'efectivo',
+                  ${svc.price}, ${svc.price})`);
+      }
+      await step('anotarse en la fila', () => tx`
+        insert into queue_entries (business_id, client_id, name) values (${biz.id}, ${cl.id}, 'Chequeo Automático')`);
+      throw new Deshacer();
+    });
+  } catch (e) {
+    if (!(e instanceof Deshacer)) {
+      ok = false;
+      console.log(`  ✘ ${e.message}`);
+    }
+  }
+  try {
+    await sql.begin(async (tx) => {
+      const [st] = await tx`select id from staff where business_id = ${biz.id} limit 1`;
+      await step('anotar intentos de ingreso', () => tx`insert into auth_failures (key) values ('chequeo')`);
+      if (st) {
+        await step('abrir sesión', () => tx`
+          insert into sessions (token_hash, kind, business_id, staff_id, expires_at)
+          values ('chequeo-' || md5(random()::text), 'staff', ${biz.id}, ${st.id}, now() + interval '1 minute')`);
+      }
+      throw new Deshacer();
+    });
+  } catch (e) {
+    if (!(e instanceof Deshacer)) {
+      ok = false;
+      console.log(`  ✘ ${e.message}`);
+    }
+  }
+  console.log(ok ? 'Chequeo: todo bien (no se guardó nada).' : '⚠ Chequeo: hay un problema de permisos en la base (ver arriba).');
+  return ok;
+}
+
 async function reset() {
   if (!process.argv.includes('--yes')) {
     console.error('Esto BORRA todos los datos. Si estás seguro: npm run db:reset -- --yes');
     process.exit(1);
   }
   await sql.unsafe(`
-    drop table if exists expenses, incomes, queue_entries, rewards, appointments, products, services,
+    drop table if exists images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
       auth_failures, sessions, clients, barber_status, staff, businesses, _migrations cascade;
   `);
   console.log('Tablas borradas.');
@@ -337,10 +416,14 @@ try {
   else if (cmd === 'prepare') {
     await migrate();
     await seed({ demo: false });
+    await check();
+  }
+  else if (cmd === 'check') {
+    if (!(await check())) process.exitCode = 1;
   }
   else if (cmd === 'seed') await seed({ demo: process.argv.includes('--demo') });
   else if (cmd === 'reset') await reset();
-  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | reset --yes | prepare');
+  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | reset --yes | prepare | check');
 } catch (e) {
   console.error('Error:', e.message);
   process.exitCode = 1;

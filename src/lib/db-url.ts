@@ -16,9 +16,11 @@ export function normalizeDbUrl(raw: string, fallbackPassword = ''): string {
   const m = /^(postgres(?:ql)?:\/\/)([^:@/]+)(?::([^@/]*))?@(.+)$/i.exec(s);
   if (m) {
     const pass = m[3] ?? '';
-    if (!isPlaceholder(pass)) return s;
-    if (!fb) throw new Error(SIN_CLAVE);
-    return `${m[1]}${m[2]}:${encodeURIComponent(fb)}@${m[4]}`;
+    if (pass && !isPlaceholder(pass)) return s;
+    // Sin contraseña en la dirección: se usa la de aparte; si no hay, se deja igual (bases locales sin clave)
+    if (fb) return `${m[1]}${m[2]}:${encodeURIComponent(fb)}@${m[4]}`;
+    if (pass) throw new Error(SIN_CLAVE);
+    return s;
   }
   if (/^postgres(ql)?:\/\//i.test(s)) return s;
   const kv: Record<string, string> = {};
