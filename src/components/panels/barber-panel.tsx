@@ -23,7 +23,7 @@ import { api } from '@/lib/api-client';
 import { firstName, money } from '@/lib/format';
 import { addDays, DAY_SHORT, dayLabel, dow, toMin } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
-import { BlockForm, BlocksList, SectionTitle, type Block } from './shared';
+import { BlockForm, BlocksList, PasswordForm, SectionTitle, type Block } from './shared';
 
 interface Service {
   id: string;
@@ -690,7 +690,10 @@ function ClientsTab({ onLogout }: { onLogout: () => void }) {
           </span>
         </div>
       ))}
-      <GhostButton small onClick={onLogout} className="mt-3 self-start">
+      <div className="mt-3">
+        <PasswordForm code />
+      </div>
+      <GhostButton small onClick={onLogout} className="mt-1 self-start">
         Salir
       </GhostButton>
     </div>

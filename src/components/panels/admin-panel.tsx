@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Chip, ErrorNote, Field, GhostButton, Kicker, LoginShell, OkNote, PrimaryButton, Stat } from '@/components/ui';
 import { api } from '@/lib/api-client';
+import { PasswordForm } from './shared';
 
 interface Biz {
   id: string;
@@ -192,6 +193,10 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
           })}
         </section>
         {cur && <BusinessDetail key={cur.id} b={cur} save={save} />}
+      </div>
+
+      <div className="max-w-[480px]">
+        <PasswordForm />
       </div>
     </div>
   );

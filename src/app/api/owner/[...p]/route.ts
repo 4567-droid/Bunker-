@@ -1,9 +1,9 @@
-import { endSessionsFor, hashPassword, normUser, verifyPassword } from '@/lib/auth';
+import { endSessionsFor, hashPassword, normUser } from '@/lib/auth';
 import { apptDto, bizNow, blockDto, businessCuts, createBlocks, loadBlocks, parseBlockInput, type ApptRow } from '@/lib/booking';
 import { phoneDisplay } from '@/lib/format';
 import { dropImage, saveImage } from '@/lib/images';
 import { currentBusiness, forgetBusinessCache, type Business } from '@/lib/business';
-import { systemTx, tenantTx, type Tx } from '@/lib/db';
+import { tenantTx, type Tx } from '@/lib/db';
 import { bool, fail, int, json, notFound, readBody, route, str, uuid, type Body } from '@/lib/http';
 import { requireStaff } from '@/lib/session';
 import { addDays, dayLabel, isDay, isOpenDay, monthDays, monthLabel, toMin, type Hours, type Now } from '@/lib/time';
@@ -514,15 +514,5 @@ export const POST = route(async (req, path) => {
     return json({ ok: true, ...('url' in result ? { url: result.url } : {}), ...('days' in result ? { days: result.days } : {}) });
   }
 
-  if (key === 'password') {
-    if (me.role !== 'owner') fail(403, 'Solo el dueño cambia su contraseña acá.');
-    const current = str(body, 'current', { max: 100, label: 'la contraseña actual' });
-    const next = str(body, 'next', { min: 8, max: 100, label: 'la contraseña nueva' });
-    const [row] = await systemTx((tx) => tx<{ password_hash: string }[]>`select password_hash from staff where id = ${me.id}`);
-    if (!row || !(await verifyPassword(current, row.password_hash))) fail(401, 'La contraseña actual no es correcta.');
-    const hash = await hashPassword(next);
-    await systemTx((tx) => tx`update staff set password_hash = ${hash} where id = ${me.id}`);
-    return json({ ok: true });
-  }
   notFound();
 });

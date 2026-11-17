@@ -17,7 +17,7 @@ Está hecha a partir de la maqueta aprobada (`docs/maqueta/`) y de las reglas de
 | `/cuenta` | Clientes | Sus datos (editar o borrar la cuenta), próximo turno, "Confirmar asistencia", calendario, últimos cortes, lugar en la fila |
 | `/barbero` | Mauri, Iván | Agenda de 14 días, empezar corte (la web muestra "se libera en X min" y los turnos siguientes se corren solos), sellar tarjeta, **No vino**, **Recordar turno por WhatsApp**, **bloquear horarios** (almuerzo, franco, vacaciones), fila, turnos a mano, clientes |
 | `/central` | Dueño | Ganancia, ingresos por barbero, gastos, estimado del mes y meta. **Turnos del día** de todos los barberos y **Clientes** (búsqueda y planilla para Excel). En **Ajustes**: horarios, **feriados y vacaciones**, precios, productos y barberos **con foto**, foto de portada, alias, link de Mercado Pago, dirección |
-| `/admin` | Nicolás | Todos los negocios: alta de negocio (nombre, color, logo, dominio) y su dueño |
+| `/admin` | Nicolás | Todos los negocios: alta de negocio (nombre, color, logo, dominio) y su dueño. Cambio de su contraseña |
 
 Reglas que ya funcionan solas:
 
@@ -98,7 +98,7 @@ Si en tu cuenta no aparece esa opción, o te pide tarjeta, usá el **otro**: son
 - Si falta alguna clave, la publicación se frena y el registro dice cuál ("Falta OWNER_PASSWORD..."). Cargala y **Redeploy**.
 - Las publicaciones siguientes no tocan los datos: solo aplican cambios nuevos de tablas, si los hay.
 - Las cuatro claves iniciales se usan una sola vez; después de la primera publicación las podés borrar de Vercel
-  (el dueño cambia la suya desde **/central → Ajustes**).
+  (cada uno cambia la suya desde la web: el dueño en **/central → Ajustes**, el admin al pie de **/admin**, los barberos en **/barbero → Clientes**).
 - `vercel.json` pone el servidor en San Pablo (`gru1`), al lado de la base, para que la web responda rápido.
 - Base en Supabase gratis: si **nadie la usa en 7 días** se pausa sola y la web deja de andar hasta que la
   reactivás desde supabase.com (botón **Restore**). Con clientes entrando todos los días no pasa.

@@ -6,7 +6,7 @@ import { api } from '@/lib/api-client';
 import { money } from '@/lib/format';
 import { addDays, DAY_LONG, DAY_SHORT, dow, type Hours } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
-import { BlockForm, BlocksList, PhotoPicker, type Block } from './shared';
+import { BlockForm, BlocksList, PasswordForm, PhotoPicker, type Block } from './shared';
 
 interface MoneyRow {
   id: string;
@@ -832,38 +832,6 @@ function ProductRow({ p, save }: { p?: Settings['products'][number]; save: Save 
         )}
       </div>
     </div>
-  );
-}
-
-function PasswordForm() {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <Section title="Cambiar mi contraseña">
-      <Small label="Contraseña actual" type="password" value={current} onChange={setCurrent} />
-      <Small label="Contraseña nueva (mínimo 8)" type="password" value={next} onChange={setNext} />
-      <ErrorNote text={error} />
-      <OkNote text={msg} />
-      <GhostButton
-        disabled={!current || next.length < 8}
-        onClick={async () => {
-          setError(null);
-          setMsg(null);
-          try {
-            await api('/api/owner/password', { current, next });
-            setMsg('Contraseña cambiada.');
-            setCurrent('');
-            setNext('');
-          } catch (e) {
-            setError((e as Error).message);
-          }
-        }}
-      >
-        Cambiar contraseña
-      </GhostButton>
-    </Section>
   );
 }
 

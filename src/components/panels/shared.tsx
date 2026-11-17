@@ -302,3 +302,39 @@ export function PhotoPicker({
 export function SectionTitle({ children }: { children: string }) {
   return <Kicker className="px-1 pt-2">{children}</Kicker>;
 }
+
+/** Cambiar la propia contraseña (dueño, admin) o código (barbero). Pega a /api/staff/password. */
+export function PasswordForm({ code = false }: { code?: boolean }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const what = code ? 'código' : 'contraseña';
+  const min = code ? 4 : 8;
+  return (
+    <section className="flex flex-col gap-2.5 rounded-[20px] border border-line bg-card p-[18px]">
+      <span className="text-base font-semibold">Cambiar mi {what}</span>
+      <Field id="pw-cur" label={`${code ? 'Código' : 'Contraseña'} actual`} type="password" autoComplete="current-password" value={current} onChange={setCurrent} />
+      <Field id="pw-new" label={`${code ? 'Código' : 'Contraseña'} nuevo${code ? '' : 'a'} (mínimo ${min})`} type="password" autoComplete="new-password" value={next} onChange={setNext} />
+      <ErrorNote text={error} />
+      {msg && <p className="m-0 rounded-[14px] border border-ok/40 bg-ok/10 px-4 py-3 text-sm text-soft">{msg}</p>}
+      <GhostButton
+        disabled={!current || next.length < min}
+        onClick={async () => {
+          setError(null);
+          setMsg(null);
+          try {
+            await api('/api/staff/password', { current, next });
+            setMsg(`Listo: ${what} cambiad${code ? 'o' : 'a'}.`);
+            setCurrent('');
+            setNext('');
+          } catch (e) {
+            setError((e as Error).message);
+          }
+        }}
+      >
+        Cambiar {what}
+      </GhostButton>
+    </section>
+  );
+}

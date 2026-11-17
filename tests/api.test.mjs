@@ -497,6 +497,35 @@ test('local cerrado de golpe: la web lo muestra y la fila no abre', async () => 
   assert.equal(live.data.open, true);
 });
 
+test('personal: cada uno cambia su propia contraseña o código', async () => {
+  let r = await owner.post('/api/staff/password', { current: 'mala', next: 'bunker-nuevo-1' });
+  assert.equal(r.status, 401);
+  r = await owner.post('/api/staff/password', { current: 'bunker-test', next: 'corta' });
+  assert.equal(r.status, 400, 'mínimo 8');
+  r = await owner.post('/api/staff/password', { current: 'bunker-test', next: 'bunker-nuevo-1' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await owner.get('/api/owner/settings');
+  assert.equal(r.status, 200, 'sigue adentro con la sesión nueva');
+  r = await agent().post('/api/staff/login', { role: 'owner', username: 'bunker', password: 'bunker-test' });
+  assert.equal(r.status, 401, 'la vieja ya no sirve');
+  r = await agent().post('/api/staff/login', { role: 'owner', username: 'bunker', password: 'bunker-nuevo-1' });
+  assert.equal(r.status, 200);
+
+  r = await admin.post('/api/staff/password', { current: 'admin-test-123', next: 'admin-nuevo-123' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await agent().post('/api/staff/login', { role: 'admin', username: 'admin', password: 'admin-nuevo-123' });
+  assert.equal(r.status, 200);
+
+  r = await ivan.post('/api/staff/password', { current: '5678', next: '12' });
+  assert.equal(r.status, 400, 'código mínimo 4');
+  r = await ivan.post('/api/staff/password', { current: '5678', next: '9999' });
+  assert.equal(r.status, 200);
+  r = await ivan.get('/api/barber/agenda');
+  assert.equal(r.status, 200);
+  r = await agent().post('/api/staff/password', { current: 'x', next: 'loquesea-1' });
+  assert.equal(r.status, 401, 'sin sesión no se puede');
+});
+
 test('seguridad: CSRF y freno a intentos', async () => {
   let r = await bruno.post('/api/client/logout', {}, { origin: 'https://otro-sitio.com' });
   assert.equal(r.status, 403);
