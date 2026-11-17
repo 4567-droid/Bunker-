@@ -82,7 +82,8 @@ Cada usuario ve solo datos de su negocio. Esto se controla con RLS en la base, n
 - Tarjeta "Reservá tu turno" con filas: corte, fecha y horario, barbero (muestran lo elegido) y botón "Sacar turno →".
 - "Ahora en el local": cada barbero con luz verde (Libre) o roja ("Se libera en X min"), en tiempo real.
 - Acceso a la tarjeta de fidelidad ("6 de 10 sellos").
-- Pie: dirección, horarios, "Cómo llegar" (Google Maps), "Acceso barberos" y "Central del dueño".
+- Pie: nombre e Instagram. La dirección, los horarios y "Cómo llegar" están en la tarjeta "Dónde estamos".
+  Los paneles **no** aparecen en la web pública: barberos y dueño entran con su link (`/barbero`, `/central`).
 
 **Turno** — 5 pasos, uno por pantalla, con "Paso X de 5" y barra de avance:
 1. Servicio.

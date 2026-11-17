@@ -261,18 +261,11 @@ export default function Inicio() {
 
       </div>
 
+      {/* Los paneles (barberos y dueño) no se muestran en la web: cada uno entra con su link */}
       <footer className="mx-6 mt-6 mb-6 flex flex-col gap-1 text-[13px] font-light text-dim md:mx-auto md:mt-10 md:w-full md:max-w-[1080px] md:px-10">
         <span>
           {biz.name}
           {ig ? ` · @${ig}` : ''}
-        </span>
-        <span className="flex flex-wrap gap-x-[18px]">
-          <Link href="/barbero" className="inline-flex min-h-9 items-center underline">
-            Acceso barberos
-          </Link>
-          <Link href="/central" className="inline-flex min-h-9 items-center underline">
-            Central del dueño
-          </Link>
         </span>
       </footer>
     </div>
