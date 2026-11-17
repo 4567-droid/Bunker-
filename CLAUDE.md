@@ -181,5 +181,14 @@ Sumado después (migración `002_bloqueos_fotos_pagos.sql`):
 - Fotos (`images`, servidas en `/api/img/<id>`), `mp_link` de Mercado Pago, `.ics` para el calendario,
   editar/borrar cuenta del cliente (los cortes viejos quedan anónimos), `manifest.ts` y vista previa (`og-bunker.png`).
 
+Velocidad e historial:
+
+- Las funciones de Vercel corren en **San Pablo (`gru1`)**, igual que la base de Supabase (`sa-east-1`).
+  Si se crea otro proyecto en Vercel, revisar Settings → Functions → Region: si queda en Washington, cada
+  consulta cruza el continente y todo anda lento.
+- Cada pedido hace las menos idas a la base posibles: sesión + usuario en una consulta, negocio en una consulta,
+  y las acciones del barbero devuelven la agenda nueva (`?view=día`).
+- Central → "Todos los meses" (`/api/owner/months`): ganancia, ingresos, gastos y cortes de cada mes.
+
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.
