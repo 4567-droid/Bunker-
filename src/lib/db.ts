@@ -1,5 +1,6 @@
 import 'server-only';
 import postgres from 'postgres';
+import { normalizeDbUrl } from './db-url';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Tx = postgres.TransactionSql<any>;
@@ -12,8 +13,9 @@ declare global {
 
 function create(): Sql {
   // DATABASE_URL (a mano) o POSTGRES_URL (la carga sola la integración de Supabase en Vercel)
-  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-  if (!url) throw new Error('Falta DATABASE_URL (ver .env.example)');
+  const raw = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (!raw) throw new Error('Falta DATABASE_URL (ver .env.example)');
+  const url = normalizeDbUrl(raw, process.env.DATABASE_PASSWORD || process.env.POSTGRES_PASSWORD || '');
   const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
   // Supabase "Transaction pooler" (puerto 6543): sin prepared statements ni pipelining
   const pooler = /:6543\//.test(url) || /pgbouncer=true/.test(url) || process.env.DATABASE_POOLER === 'transaction';

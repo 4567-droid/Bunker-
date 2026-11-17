@@ -18,7 +18,7 @@ export interface Block {
   mine?: boolean;
 }
 
-const TIMES = Array.from({ length: (24 - 6) * 4 + 1 }, (_, i) => {
+export const TIMES = Array.from({ length: (24 - 6) * 4 + 1 }, (_, i) => {
   const m = 6 * 60 + i * 15;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }).filter((t) => t <= '24:00');
@@ -39,6 +39,12 @@ export function SelectField({ id, label, value, onChange, options }: { id: strin
       </select>
     </label>
   );
+}
+
+/** Hora en 24 h con una lista (el reloj del celular a veces muestra AM/PM) */
+export function TimeField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+  const list = TIMES.includes(value) ? TIMES : [...TIMES, value].sort();
+  return <SelectField id={id} label={label} value={value} onChange={onChange} options={list.map((t) => ({ value: t, label: t }))} />;
 }
 
 export function DateField({ id, label, value, onChange, min }: { id: string; label: string; value: string; onChange: (v: string) => void; min?: string }) {

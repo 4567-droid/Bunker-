@@ -1,6 +1,6 @@
 import { endSessionsFor, hashPassword, normUser } from '@/lib/auth';
 import { apptDto, bizNow, blockDto, businessCuts, createBlocks, loadBlocks, parseBlockInput, type ApptRow } from '@/lib/booking';
-import { phoneDisplay } from '@/lib/format';
+import { areaFromWhatsapp, instagramHandle, phoneDisplay, whatsappIntl } from '@/lib/format';
 import { dropImage, saveImage } from '@/lib/images';
 import { currentBusiness, forgetBusinessCache, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
@@ -127,6 +127,80 @@ async function finance(tx: Tx, biz: Business, month: string, now: Now) {
   };
 }
 
+/** Todos los meses, del primero con movimiento hasta el actual: cómo les fue a cada uno */
+async function months(tx: Tx, biz: Business, now: Now) {
+  const rows = await tx<{ m: string; cuts: number; service: number; other: number; expense: number; no_show: number; new_clients: number }[]>`
+    select m, sum(cuts)::int as cuts, sum(service)::float8 as service, sum(other)::float8 as other,
+           sum(expense)::float8 as expense, sum(no_show)::int as no_show, sum(new_clients)::int as new_clients
+    from (
+      select to_char(day, 'YYYY-MM') as m, (status = 'completed')::int as cuts,
+             case when status = 'completed' then final_price else 0 end as service, 0 as other, 0 as expense,
+             (status = 'no_show')::int as no_show, 0 as new_clients
+        from appointments where business_id = ${biz.id} and status in ('completed', 'no_show')
+      union all
+      select to_char(on_date, 'YYYY-MM'), 0, 0, amount, 0, 0, 0 from incomes where business_id = ${biz.id}
+      union all
+      select to_char(on_date, 'YYYY-MM'), 0, 0, 0, amount, 0, 0 from expenses where business_id = ${biz.id}
+      union all
+      select to_char(created_at at time zone ${biz.timezone}, 'YYYY-MM'), 0, 0, 0, 0, 0, 1 from clients where business_id = ${biz.id}
+    ) x
+    group by m order by m`;
+  const current = now.day.slice(0, 7);
+  const byMonth = new Map(rows.map((r) => [r.m, r]));
+  const first = rows.find((r) => r.m <= current)?.m ?? current;
+  const list: string[] = [];
+  for (let m = first; m <= current && list.length < 240; m = shiftMonth(m, 1)) list.push(m);
+
+  let prev: { profit: number; active: boolean } | null = null;
+  const out = list.map((m) => {
+    const r = byMonth.get(m);
+    const service = Math.round(r?.service ?? 0);
+    const other = Math.round(r?.other ?? 0);
+    const expense = Math.round(r?.expense ?? 0);
+    const income = service + other;
+    const profit = income - expense;
+    const cuts = r?.cuts ?? 0;
+    const item = {
+      month: m,
+      label: monthLabel(m),
+      isCurrent: m === current,
+      income,
+      serviceIncome: service,
+      otherIncome: other,
+      expense,
+      profit,
+      cuts,
+      avgTicket: cuts ? Math.round(service / cuts) : 0,
+      noShows: r?.no_show ?? 0,
+      newClients: r?.new_clients ?? 0,
+      // Cuánto más (o menos) ganaron que el mes anterior. null si el anterior no tuvo movimiento
+      profitDiff: prev && prev.active ? profit - prev.profit : null,
+    };
+    prev = { profit, active: income > 0 || expense > 0 };
+    return item;
+  });
+
+  const years = [...new Set(out.map((x) => x.month.slice(0, 4)))].map((y) => {
+    const ms = out.filter((x) => x.month.startsWith(y));
+    return {
+      year: y,
+      income: ms.reduce((a, x) => a + x.income, 0),
+      expense: ms.reduce((a, x) => a + x.expense, 0),
+      profit: ms.reduce((a, x) => a + x.profit, 0),
+      cuts: ms.reduce((a, x) => a + x.cuts, 0),
+      months: ms.length,
+    };
+  });
+  const closed = out.filter((x) => !x.isCurrent && (x.income > 0 || x.expense > 0));
+  const best = closed.length ? closed.reduce((a, x) => (x.profit > a.profit ? x : a)) : null;
+  return { current, months: out.reverse(), years: years.reverse(), best: best?.month ?? null };
+}
+
+function shiftMonth(m: string, n: number): string {
+  const [y, mo] = m.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7);
+}
+
 function parseHours(raw: unknown): Hours {
   if (!raw || typeof raw !== 'object') fail(400, 'Horarios inválidos.');
   const out: Hours = {};
@@ -163,7 +237,8 @@ async function settings(tx: Tx, biz: Business) {
       name: b.name,
       address: b.address,
       city: b.city,
-      whatsapp: b.whatsapp,
+      // En Ajustes se ve como lo escribe cualquiera: 362 449-3647
+      whatsapp: b.whatsapp && /^549\d{10}$/.test(b.whatsapp) ? phoneDisplay(b.whatsapp.slice(3)) : b.whatsapp,
       instagram: b.instagram,
       mapsUrl: b.maps_url,
       transferAlias: b.transfer_alias,
@@ -226,19 +301,22 @@ const optText = (b: Body, k: string, max = 200) => {
   return v || null;
 };
 
-function mpLink(b: Body): string | null {
-  const v = optText(b, 'mpLink', 300);
+/** Link https (Mercado Pago, Google Maps): se acepta con o sin https://, nunca javascript: ni otros */
+function httpsLink(b: Body, key: string, message: string): string | null {
+  const v = optText(b, key, 400);
   if (!v) return null;
   let u: URL;
   try {
     u = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
   } catch {
-    fail(400, 'Revisá el link de Mercado Pago (ej: https://link.mercadopago.com.ar/bunker).');
+    fail(400, message);
   }
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') fail(400, 'Revisá el link de Mercado Pago.');
+  if ((u.protocol !== 'https:' && u.protocol !== 'http:') || !u.hostname.includes('.')) fail(400, message);
   u.protocol = 'https:';
   return u.toString();
 }
+
+const mpLink = (b: Body) => httpsLink(b, 'mpLink', 'Revisá el link de Mercado Pago (ej: https://link.mercadopago.com.ar/bunker).');
 
 export const GET = route(async (req, [action]) => {
   const biz = await currentBusiness();
@@ -250,6 +328,7 @@ export const GET = route(async (req, [action]) => {
     return json(await tenantTx(biz.id, (tx) => finance(tx, biz, month, now)));
   }
   if (action === 'settings') return json(await tenantTx(biz.id, (tx) => settings(tx, biz)));
+  if (action === 'months') return json(await tenantTx(biz.id, (tx) => months(tx, biz, now)));
 
   const q = new URL(req.url).searchParams;
   if (action === 'blocks') {
@@ -377,13 +456,18 @@ export const POST = route(async (req, path) => {
 
       case 'business': {
         const hours = body.hours !== undefined ? parseHours(body.hours) : biz.hours;
-        const whatsapp = optText(body, 'whatsapp', 20)?.replace(/\D/g, '') || null;
+        const waRaw = optText(body, 'whatsapp', 30);
+        const whatsapp = waRaw ? whatsappIntl(waRaw, areaFromWhatsapp(biz.whatsapp) ?? '362') : null;
+        if (waRaw && !whatsapp) fail(400, 'Revisá el WhatsApp (ej: 362 449-3647).');
+        const igRaw = optText(body, 'instagram', 200);
+        const instagram = igRaw ? instagramHandle(igRaw) : null;
+        if (igRaw && !instagram) fail(400, 'Revisá el Instagram: pegá el link del perfil o escribí el usuario (ej: bunkerbarberclub).');
         await tx`update businesses set
                    address = ${optText(body, 'address', 120)},
                    city = ${optText(body, 'city', 80)},
                    whatsapp = ${whatsapp},
-                   instagram = ${optText(body, 'instagram', 60)?.replace(/^@/, '') ?? null},
-                   maps_url = ${optText(body, 'mapsUrl', 400)},
+                   instagram = ${instagram},
+                   maps_url = ${httpsLink(body, 'mapsUrl', 'Revisá el link de Google Maps (o dejalo vacío: se arma solo con la dirección).')},
                    transfer_alias = ${optText(body, 'transferAlias', 60)},
                    mp_link = ${mpLink(body)},
                    hours = ${tx.json(hours)},

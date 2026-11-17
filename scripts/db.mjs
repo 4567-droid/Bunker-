@@ -35,8 +35,55 @@ loadEnv();
 
 const onVercel = !!process.env.VERCEL;
 const cmd = process.argv[2];
+
+// Acepta la dirección en los dos formatos que muestra Supabase (URL o "host=... port=... password=...").
+// Copia de src/lib/db-url.ts: si cambiás algo acá, cambialo allá.
+const SIN_CLAVE =
+  'DATABASE_URL: falta la contraseña de la base. Cargala en Vercel como DATABASE_PASSWORD ' +
+  '(Settings → Environment Variables) y volvé a publicar. Si no la recordás: Supabase → Project Settings → Database → Reset database password.';
+
+/** @param fallbackPassword contraseña aparte (DATABASE_PASSWORD o POSTGRES_PASSWORD), por si la dirección no la trae */
+function normalizeDbUrl(raw, fallbackPassword = '') {
+  const s = raw.trim().replace(/^["']|["']$/g, '');
+  const fb = fallbackPassword.trim();
+  const isPlaceholder = (p) => !p || /YOUR-PASSWORD/i.test(p);
+  const m = /^(postgres(?:ql)?:\/\/)([^:@/]+)(?::([^@/]*))?@(.+)$/i.exec(s);
+  if (m) {
+    const pass = m[3] ?? '';
+    if (pass && !isPlaceholder(pass)) return s;
+    // Sin contraseña en la dirección: se usa la de aparte; si no hay, se deja igual (bases locales sin clave)
+    if (fb) return `${m[1]}${m[2]}:${encodeURIComponent(fb)}@${m[4]}`;
+    if (pass) throw new Error(SIN_CLAVE);
+    return s;
+  }
+  if (/^postgres(ql)?:\/\//i.test(s)) return s;
+  const kv = {};
+  for (const x of s.matchAll(/([A-Za-z_]+)\s*[=:]\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g)) {
+    kv[x[1].toLowerCase()] = x[2] ?? x[3] ?? x[4] ?? '';
+  }
+  const host = kv.host ?? kv.hostname;
+  if (!host) {
+    throw new Error('DATABASE_URL no tiene el formato esperado: pegá la dirección que empieza con postgresql:// (Supabase → Connect → Transaction pooler).');
+  }
+  const user = kv.user ?? kv.username ?? 'postgres';
+  let pass = kv.password ?? kv.pass ?? '';
+  if (isPlaceholder(pass)) pass = fb;
+  if (!pass) throw new Error(SIN_CLAVE);
+  const port = kv.port ?? '5432';
+  const db = kv.database ?? kv.dbname ?? 'postgres';
+  const q = kv.sslmode ? `?sslmode=${encodeURIComponent(kv.sslmode)}` : '';
+  return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${db}${q}`;
+}
+
 // DIRECT_URL (opcional, para crear tablas), DATABASE_URL, o POSTGRES_URL (la integración de Vercel)
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const rawUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+let url = null;
+try {
+  url = rawUrl ? normalizeDbUrl(rawUrl, process.env.DATABASE_PASSWORD || process.env.POSTGRES_PASSWORD || '') : null;
+} catch (e) {
+  console.error('Error:', e.message);
+  process.exit(1);
+}
 if (!url) {
   if (cmd === 'prepare') {
     console.warn('⚠ Todavía no hay una base de datos conectada: se compila igual, pero la web va a avisar que falta.');
@@ -131,11 +178,11 @@ async function seed({ demo }) {
     }
     [biz] = await tx`
       insert into businesses (slug, name, kind, domain, status, accent, logo_url, whatsapp, instagram,
-                              city, maps_url, hours)
+                              address, city, maps_url, hours)
       values ('bunker', 'Bunker Barber Club', 'Barbería', ${process.env.SEED_DOMAIN || null}, 'activo',
-              '#F5C400', '/brand/bunker-badge.png', '5493625493647', 'bunkerbarberclub',
-              'Resistencia, Chaco',
-              'https://www.google.com/maps/search/?api=1&query=Bunker+Barber+Club+Resistencia+Chaco',
+              '#F5C400', '/brand/bunker-badge.png', '5493624493647', 'bunkerbarberclub',
+              'Calle Isabel la Católica', 'H3506 Resistencia, Chaco',
+              'https://www.google.com/maps/search/?api=1&query=Isabel+la+Cat%C3%B3lica%2C+H3506+Resistencia%2C+Chaco',
               ${tx.json(BUNKER_HOURS)})
       returning *`;
 
@@ -274,13 +321,92 @@ async function seedDemo(tx, biz) {
   console.log(`Demo: ${clients.length} clientes, ${n} cortes del mes, turnos de hoy y mañana, gastos, fila y un bloqueo.`);
 }
 
+// ---------------------------------------------------------------------
+// Chequeo de permisos: hace en la base real lo mismo que la web al registrar un cliente y
+// reservar, con el mismo rol (bunker_app), y al final DESHACE todo. No guarda ni cambia datos.
+// ---------------------------------------------------------------------
+class Deshacer extends Error {}
+
+async function check() {
+  const slug = process.env.DEFAULT_BUSINESS_SLUG || 'bunker';
+  const [biz] = await sql`select id from businesses where slug = ${slug}`;
+  if (!biz) {
+    console.log(`Chequeo: no hay negocio "${slug}" todavía.`);
+    return true;
+  }
+  let ok = true;
+  const step = async (name, fn) => {
+    try {
+      const r = await fn();
+      console.log(`  ✔ ${name}`);
+      return r;
+    } catch (e) {
+      ok = false;
+      console.log(`  ✘ ${name}: ${e.code ? `[${e.code}] ` : ''}${e.message}`);
+      throw new Deshacer();
+    }
+  };
+  console.log('Chequeo de permisos (se deshace al final):');
+  try {
+    await sql.begin(async (tx) => {
+      await step('entrar como la web (rol bunker_app)', () => tx`
+        select set_config('app.business_id', ${biz.id}, true), set_config('app.is_admin', 'off', true),
+               set_config('role', 'bunker_app', true)`);
+      const [svc] = await step('leer servicios', () => tx`select id, name, duration_min, price from services where business_id = ${biz.id} and active limit 1`);
+      const [bar] = await step('leer barberos', () => tx`select id from staff where business_id = ${biz.id} and role = 'barber' and active limit 1`);
+      await step('leer bloqueos y turnos', () => tx`select (select count(*) from blocks) as b, (select count(*) from appointments) as a`);
+      const [cl] = await step('crear cliente', () => tx`
+        insert into clients (business_id, name, phone, referral_code)
+        values (${biz.id}, 'Chequeo Automático', '3620000001', 'CHEQ01') returning id`);
+      await step('candado del día', () => tx`select pg_advisory_xact_lock(hashtext('bk:chequeo'))`);
+      if (svc && bar) {
+        await step('reservar turno', () => tx`
+          insert into appointments (business_id, client_id, client_name, client_phone, barber_id, service_id, service_name,
+                                    duration_min, day, start_min, end_min, source, payment, price, final_price)
+          values (${biz.id}, ${cl.id}, 'Chequeo Automático', '3620000001', ${bar.id}, ${svc.id}, ${svc.name},
+                  ${svc.duration_min}, current_date + 400, 1380, ${1380 + svc.duration_min}, 'web', 'efectivo',
+                  ${svc.price}, ${svc.price})`);
+      }
+      await step('anotarse en la fila', () => tx`
+        insert into queue_entries (business_id, client_id, name) values (${biz.id}, ${cl.id}, 'Chequeo Automático')`);
+      await step('invitaciones (cuentas borradas)', () => tx`
+        insert into former_clients (business_id, phone_hash) values (${biz.id}, 'chequeo')`);
+      throw new Deshacer();
+    });
+  } catch (e) {
+    if (!(e instanceof Deshacer)) {
+      ok = false;
+      console.log(`  ✘ ${e.message}`);
+    }
+  }
+  try {
+    await sql.begin(async (tx) => {
+      const [st] = await tx`select id from staff where business_id = ${biz.id} limit 1`;
+      await step('anotar intentos de ingreso', () => tx`insert into auth_failures (key) values ('chequeo')`);
+      if (st) {
+        await step('abrir sesión', () => tx`
+          insert into sessions (token_hash, kind, business_id, staff_id, expires_at)
+          values ('chequeo-' || md5(random()::text), 'staff', ${biz.id}, ${st.id}, now() + interval '1 minute')`);
+      }
+      throw new Deshacer();
+    });
+  } catch (e) {
+    if (!(e instanceof Deshacer)) {
+      ok = false;
+      console.log(`  ✘ ${e.message}`);
+    }
+  }
+  console.log(ok ? 'Chequeo: todo bien (no se guardó nada).' : '⚠ Chequeo: hay un problema de permisos en la base (ver arriba).');
+  return ok;
+}
+
 async function reset() {
   if (!process.argv.includes('--yes')) {
     console.error('Esto BORRA todos los datos. Si estás seguro: npm run db:reset -- --yes');
     process.exit(1);
   }
   await sql.unsafe(`
-    drop table if exists expenses, incomes, queue_entries, rewards, appointments, products, services,
+    drop table if exists former_clients, images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
       auth_failures, sessions, clients, barber_status, staff, businesses, _migrations cascade;
   `);
   console.log('Tablas borradas.');
@@ -292,10 +418,14 @@ try {
   else if (cmd === 'prepare') {
     await migrate();
     await seed({ demo: false });
+    await check();
+  }
+  else if (cmd === 'check') {
+    if (!(await check())) process.exitCode = 1;
   }
   else if (cmd === 'seed') await seed({ demo: process.argv.includes('--demo') });
   else if (cmd === 'reset') await reset();
-  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | reset --yes | prepare');
+  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | reset --yes | prepare | check');
 } catch (e) {
   console.error('Error:', e.message);
   process.exitCode = 1;

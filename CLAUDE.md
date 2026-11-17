@@ -8,7 +8,8 @@ Este archivo explica todo el proyecto. Leelo completo antes de programar y respe
 - Cliente: **Bunker Barber Club** (Instagram @bunkerbarberclub, "since 2019"), Resistencia, Chaco.
 - Barberos: **Mauri** e **Iván**.
 - Hoy atienden por orden de llegada. El sistema suma turnos online **sin sacar la fila** de los que llegan sin turno.
-- WhatsApp de la barbería: **+54 9 362 549-3647** (`wa.me/5493625493647`).
+- WhatsApp de la barbería: **+54 9 362 449-3647** (`wa.me/5493624493647`). Cambiado el 17/11/2026 (antes figuraba 362 549-3647).
+- Instagram: https://www.instagram.com/bunkerbarberclub · Dirección: Calle Isabel la Católica, H3506 Resistencia, Chaco.
 - Más adelante el mismo código tiene que servir para otros negocios (otras barberías, uñas, consultorios): cada negocio con su nombre, colores, logo y dominio, todos manejados desde un panel de administrador.
 
 ## Material de referencia (en esta carpeta)
@@ -137,7 +138,7 @@ Cada usuario ve solo datos de su negocio. Esto se controla con RLS en la base, n
 
 ## Datos a completar (hoy son placeholders)
 
-- Dirección, horarios de atención, alias para transferencias.
+- Horarios de atención reales, alias para transferencias y la altura de la dirección (hoy: Calle Isabel la Católica, sin número).
 - Fotos del local, de los barberos y de los productos, y precios de productos.
 - Dominio (opción más barata: `bunkerbarberclub.com.ar` en NIC Argentina, con Clave Fiscal nivel 2).
 
@@ -180,6 +181,35 @@ Sumado después (migración `002_bloqueos_fotos_pagos.sql`):
 - "No vino" (`no_show`), recordatorio por WhatsApp (`reminded_at`), turnos del día y clientes (con CSV) en la Central.
 - Fotos (`images`, servidas en `/api/img/<id>`), `mp_link` de Mercado Pago, `.ics` para el calendario,
   editar/borrar cuenta del cliente (los cortes viejos quedan anónimos), `manifest.ts` y vista previa (`og-bunker.png`).
+
+Velocidad e historial:
+
+- Las funciones de Vercel corren en **San Pablo (`gru1`)**, igual que la base de Supabase (`sa-east-1`).
+  Si se crea otro proyecto en Vercel, revisar Settings → Functions → Region: si queda en Washington, cada
+  consulta cruza el continente y todo anda lento.
+- Cada pedido hace las menos idas a la base posibles: sesión + usuario en una consulta, negocio en una consulta,
+  y las acciones del barbero devuelven la agenda nueva (`?view=día`).
+- Central → "Todos los meses" (`/api/owner/months`): ganancia, ingresos, gastos y cortes de cada mes.
+
+Revisión del 17/11/2026 (migración `003_datos_bunker.sql` con WhatsApp, Instagram y dirección reales):
+
+- Globo de WhatsApp fijo (`src/components/client/wa-bubble.tsx`) en Inicio y Productos; en Turno, Fidelidad y
+  Cuenta no se muestra porque taparía botones. Tarjeta "Dónde estamos" en Inicio (Cómo llegar, Instagram, WhatsApp).
+- En Ajustes el WhatsApp, Instagram y Maps se aceptan como los escriba el dueño (`whatsappIntl`, `instagramHandle`,
+  `mapsHref` en `format.ts`); los links solo pueden ser https. Horarios con listas en 24 h.
+- "Crear cuenta" con un teléfono que ya tiene cuenta entra a esa cuenta (si tiene correo, lo pide: código `needs_email`).
+- El corte gratis de la tarjeta vale para un solo turno reservado a la vez.
+- Turno: Atrás/Siguiente fijos abajo, aviso de los turnos que ya tiene, confirmación antes de "Cambiar turno".
+
+Invitaciones (migración `004_invitaciones.sql`):
+
+- El código de un amigo se escribe al crear la cuenta (viene escrito si entra por el link `/?ref=CODIGO`) y avisa
+  al momento si existe. Un código mal escrito da error (antes se ignoraba en silencio).
+- Si se registró sin código, lo puede cargar después en Fidelidad, hasta su primer corte; si ya tiene un turno
+  reservado, el 20% se aplica a ese turno. Una vez usado, la opción desaparece (`me.invite.canUse`).
+- El código de cada cliente sirve para invitar a muchos amigos (un premio por cada amigo que se corta).
+- Quien borra su cuenta deja la huella HMAC de su teléfono en `former_clients` (clave `APP_SECRET`, solo en Vercel):
+  si vuelve a registrarse con ese teléfono, no recibe otra vez el descuento.
 
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

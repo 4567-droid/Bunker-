@@ -61,7 +61,11 @@ export interface Me {
   history?: PastCut[];
   rewards?: { id: string; kind: string; percent: number; status: string; from: string | null }[];
   referrals?: { invited: number; rewarded: number };
+  /** canUse: todavía puede cargar el código de un amigo (nunca se cortó y no usó otro) */
+  invite?: { canUse: boolean; by: string | null; percent: number };
   queue?: { id: string; status: string; position: number; waitMin: number } | null;
+  /** Aviso para mostrar después de entrar o de cargar un código */
+  notice?: string | null;
 }
 
 export interface Live {
@@ -94,6 +98,8 @@ interface Ctx {
   setDraft: (patch: Partial<Draft>) => void;
   resetDraft: () => void;
   referral: { code: string; name: string; percent: number } | null;
+  /** Guarda un código ya validado (del link o escrito a mano) */
+  setReferral: (r: { code: string; name: string; percent: number }) => void;
   clearReferral: () => void;
 }
 
@@ -154,7 +160,8 @@ export function ClientApp({ config, children }: { config: PublicConfig; children
   useEffect(() => {
     refreshMe();
     refreshLive();
-    const t = setInterval(refreshLive, 15_000);
+    // Con la pestaña en segundo plano no se consulta (ahorra batería y pedidos); al volver se actualiza
+    const t = setInterval(() => document.visibilityState === 'visible' && refreshLive(), 15_000);
     const onVis = () => {
       if (document.visibilityState === 'visible') {
         refreshLive();
@@ -211,9 +218,14 @@ export function ClientApp({ config, children }: { config: PublicConfig; children
     setReferral(null);
   }, []);
 
+  const saveReferral = useCallback((r: { code: string; name: string; percent: number }) => {
+    storage('local').set('bk_ref', r.code);
+    setReferral(r);
+  }, []);
+
   const value = useMemo<Ctx>(
-    () => ({ config, me, setMe, refreshMe, live, refreshLive, draft, setDraft, resetDraft, referral, clearReferral }),
-    [config, me, refreshMe, live, refreshLive, draft, setDraft, resetDraft, referral, clearReferral],
+    () => ({ config, me, setMe, refreshMe, live, refreshLive, draft, setDraft, resetDraft, referral, setReferral: saveReferral, clearReferral }),
+    [config, me, refreshMe, live, refreshLive, draft, setDraft, resetDraft, referral, saveReferral, clearReferral],
   );
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

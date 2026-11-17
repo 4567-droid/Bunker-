@@ -4,9 +4,13 @@ import Link from 'next/link';
 import { useApp } from '@/components/client/app-context';
 import { PageTitle } from '@/components/ui';
 import { money } from '@/lib/format';
+import { enviarWhatsApp } from '@/lib/whatsapp';
 
 export default function Productos() {
   const { config, draft, setDraft } = useApp();
+  const biz = config.business;
+  const ask = (name: string) =>
+    biz.whatsapp ? enviarWhatsApp({ to: biz.whatsapp, text: `Hola ${biz.name.split(/\s+/)[0]}! Quería consultar el precio de ${name}.` }).url : null;
   const chosen = draft.productIds;
   const toggle = (id: string) =>
     setDraft({ productIds: chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id] });
@@ -26,7 +30,15 @@ export default function Productos() {
             )}
             <div className="flex items-baseline justify-between gap-2.5">
               <h2 className="m-0 text-lg font-medium">{p.name}</h2>
-              <span className="text-sm font-medium text-accent">{p.price !== null ? money(p.price) : 'Consultar'}</span>
+              {p.price !== null ? (
+                <span className="text-sm font-medium text-accent">{money(p.price)}</span>
+              ) : ask(p.name) ? (
+                <a href={ask(p.name)!} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center text-sm font-medium text-accent underline underline-offset-4">
+                  Consultar precio
+                </a>
+              ) : (
+                <span className="text-sm font-medium text-accent">Consultar</span>
+              )}
             </div>
             {p.description && <span className="text-sm font-light text-muted">{p.description}</span>}
             <button

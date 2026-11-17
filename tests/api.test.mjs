@@ -86,8 +86,28 @@ test('registro con y sin invitación', async () => {
   assert.equal(r.data.rewards[0].kind, 'welcome');
   assert.equal(r.data.rewards[0].from, 'Ana');
 
+  // Si ya tenía cuenta (sin correo), "crear cuenta" lo hace entrar a la suya en vez de trabarse
   r = await agent().post('/api/client/register', { name: 'Otro Bruno', phone: '+54 9 362 422-2222' });
-  assert.equal(r.status, 409);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.client.name, 'Bruno Díaz', 'entra a la cuenta que ya existía, sin crear otra');
+});
+
+test('teléfono: sin código de área se completa con el 362, y se acepta cualquier otro número', async () => {
+  const x = agent();
+  let r = await x.post('/api/client/register', { name: 'Luis Local', phone: '15 488-8888' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.client.phone, '3624888888');
+  r = await agent().post('/api/client/login', { phone: '488 8888' });
+  assert.equal(r.status, 200, 'entra también con el número corto');
+  r = await agent().post('/api/client/register', { name: 'Otro Corto', phone: '12345' });
+  assert.equal(r.status, 400, 'menos de 6 números');
+  // Cualquier otro número sirve: de otro país, fijo, etc.
+  r = await agent().post('/api/client/register', { name: 'Ana Paraguay', phone: '+595 981 123456' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.client.phone, '595981123456');
+  assert.equal(r.data.client.phoneDisplay, '+595981123456');
+  r = await agent().post('/api/client/login', { phone: '00595 981 123 456' });
+  assert.equal(r.status, 200, 'entra escribiéndolo de otra forma');
 });
 
 test('ingreso: si cargó correo, se pide el correo', async () => {
@@ -101,6 +121,13 @@ test('ingreso: si cargó correo, se pide el correo', async () => {
   assert.equal(r.data.client.name, 'Carla Gómez');
   r = await other.post('/api/client/login', { phone: '3629999999' });
   assert.equal(r.status, 404);
+  // "Crear cuenta" con un teléfono que ya tiene correo: pide el correo
+  r = await agent().post('/api/client/register', { name: 'Carla Otra', phone: '362 433-3333' });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.code, 'needs_email');
+  r = await agent().post('/api/client/register', { name: 'Carla Gómez', phone: '362 433-3333', email: 'carla@mail.com' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.client.name, 'Carla Gómez');
 });
 
 test('días y horarios libres', async () => {
@@ -188,6 +215,17 @@ test('barbero: empezar corte, luz roja y sellar', async () => {
   assert.match(q.data.reason, /invitar/);
   const live2 = await pub.get('/api/public/live');
   assert.equal(live2.data.barbers.find((b) => b.name === 'Mauri').state, 'free');
+
+  // Libre / Ocupado: la respuesta ya trae la agenda y la fila nuevas (un solo viaje)
+  r = await mauri.post('/api/barber/status?view=2026-11-13', { state: 'busy' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.agenda.status.state, 'busy');
+  assert.equal(r.data.agenda.day, '2026-11-13');
+  assert.ok(Array.isArray(r.data.queue.waiting));
+  assert.equal((await pub.get('/api/public/live')).data.barbers.find((b) => b.name === 'Mauri').state, 'busy');
+  r = await mauri.post('/api/barber/status', { state: 'free' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.agenda, undefined, 'sin ?view no la manda');
 });
 
 test('tarjeta llena: el 10.º corte es gratis', async () => {
@@ -197,7 +235,15 @@ test('tarjeta llena: el 10.º corte es gratis', async () => {
   let r = await bruno.post('/api/client/book', { serviceId: ctx.svc['Barba sola'], day: DAY, time: '16:00', barberId: ctx.barber.Mauri, payment: 'efectivo' });
   assert.equal(r.status, 201);
   assert.equal(r.data.appointment.finalPrice, 0);
-  r = await mauri.post('/api/barber/complete', { id: r.data.appointment.id });
+  const freeId = r.data.appointment.id;
+  // El corte gratis es uno solo: un segundo turno reservado se cobra
+  const q2 = await bruno.get(`/api/client/quote?service=${ctx.svc['Barba sola']}`);
+  assert.equal(q2.data.discountPct, 0);
+  r = await bruno.post('/api/client/book', { serviceId: ctx.svc['Barba sola'], day: DAY, time: '19:00', barberId: ctx.barber.Mauri, payment: 'efectivo' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.appointment.finalPrice, 10000);
+  assert.equal((await bruno.post('/api/client/cancel', { id: r.data.appointment.id })).status, 200);
+  r = await mauri.post('/api/barber/complete', { id: freeId });
   assert.equal(r.data.free, true);
   const me = await bruno.get('/api/client/me');
   assert.equal(me.data.client.stamps, 0);
@@ -258,7 +304,51 @@ test('central del dueño: ingresos, gastos y ajustes', async () => {
   assert.equal(f.data.profit, 34000);
   assert.equal(f.data.booked.n, 2, 'turnos reservados que faltan (Ana 11:30 e Iván 12:00)');
 
+  // Todos los meses: octubre con un gasto (perdió), noviembre en curso
+  r = await owner.post('/api/owner/expense', { category: 'Alquiler', description: 'Alquiler octubre', amount: 80000, date: '2026-10-05' });
+  assert.equal(r.status, 200);
+  const ms = await owner.get('/api/owner/months');
+  assert.equal(ms.status, 200);
+  const [nov, oct] = ms.data.months;
+  assert.equal(nov.month, '2026-11');
+  assert.ok(nov.isCurrent);
+  assert.equal(nov.income, 39000);
+  assert.equal(nov.profit, 34000);
+  assert.equal(nov.cuts, 4);
+  assert.equal(nov.profitDiff, 34000 + 80000, 'ganaron 114.000 más que en octubre');
+  assert.equal(oct.month, '2026-10');
+  assert.equal(oct.expense, 80000);
+  assert.equal(oct.profit, -80000);
+  assert.equal(oct.profitDiff, null, 'septiembre no tuvo movimiento');
+  assert.equal(ms.data.years[0].year, '2026');
+  assert.equal(ms.data.years[0].profit, 34000 - 80000);
+  assert.equal(ms.data.best, '2026-10');
+  f = await owner.get('/api/owner/finance?month=2026-10');
+  assert.equal(f.data.expense, 80000);
+  assert.equal((await mauri.get('/api/owner/months')).status, 401, 'un barbero no ve el historial');
+
   const st = await owner.get('/api/owner/settings');
+  // WhatsApp, Instagram y Maps: se aceptan como los escribe cualquiera
+  const b = st.data.business;
+  r = await owner.post('/api/owner/business', { ...b, mapsUrl: 'javascript:alert(1)' });
+  assert.equal(r.status, 400, 'nada de links raros');
+  r = await owner.post('/api/owner/business', { ...b, instagram: 'no vale con espacios' });
+  assert.equal(r.status, 400);
+  r = await owner.post('/api/owner/business', {
+    ...b,
+    whatsapp: '0362 15 449-3647',
+    instagram: 'https://www.instagram.com/bunkerbarberclub?rpxt=MTVrcjBkM3JybmF4bw==',
+    mapsUrl: '',
+    address: 'Calle Isabel la Católica',
+    city: 'H3506 Resistencia, Chaco',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const st2 = await owner.get('/api/owner/settings');
+  assert.equal(st2.data.business.whatsapp, '362 449-3647');
+  assert.equal(st2.data.business.instagram, 'bunkerbarberclub');
+  const cfg0 = await pub.get('/api/public/config');
+  assert.equal(cfg0.data.business.whatsapp, '5493624493647');
+  assert.equal(cfg0.data.business.address, 'Calle Isabel la Católica');
   const corte = st.data.services.find((s) => s.name === 'Corte');
   r = await owner.post('/api/owner/service/update', { ...corte, price: 16000 });
   assert.equal(r.status, 200);
@@ -524,6 +614,71 @@ test('personal: cada uno cambia su propia contraseña o código', async () => {
   assert.equal(r.status, 200);
   r = await agent().post('/api/staff/password', { current: 'x', next: 'loquesea-1' });
   assert.equal(r.status, 401, 'sin sesión no se puede');
+});
+
+test('invitaciones: código a mano, sirve para varios amigos, una sola vez por cliente', async () => {
+  const DAY2 = '2026-11-20';
+  const slotFor = async (barberId) => {
+    const s = await pub.get(`/api/public/slots?service=${ctx.svc.Corte}&day=${DAY2}`);
+    return s.data.slots.find((x) => x.free.includes(barberId));
+  };
+
+  // Código mal escrito: se avisa (antes se ignoraba en silencio y no había descuento)
+  let r = await agent().post('/api/client/register', { name: 'Diego Nuevo', phone: '362 455-0001', ref: 'NOEXISTE1' });
+  assert.equal(r.status, 400);
+  assert.equal(r.data.code, 'bad_ref');
+
+  // Escrito a mano, en minúsculas y con espacios: funciona
+  const diego = agent();
+  r = await diego.post('/api/client/register', { name: 'Diego Nuevo', phone: '362 455-0001', ref: ` ${ctx.anaCode.slice(0, 3).toLowerCase()} ${ctx.anaCode.slice(3)} ` });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.rewards[0].kind, 'welcome');
+  assert.equal(r.data.invite.by, 'Ana');
+  assert.equal(r.data.invite.canUse, false, 'ya lo usó: no vuelve a tener la opción');
+  r = await diego.post('/api/client/referral', { code: ctx.anaCode });
+  assert.equal(r.status, 409, 'no se puede usar dos veces');
+
+  // El mismo código sirve para otro amigo
+  r = await agent().post('/api/client/register', { name: 'Elena Nueva', phone: '362 455-0002', ref: ctx.anaCode });
+  assert.equal(r.status, 201, 'el código de Ana sirve para varios amigos');
+
+  // Se registró sin código y ya reservó: lo carga después y se aplica a ese turno
+  const fede = agent();
+  r = await fede.post('/api/client/register', { name: 'Fede Tarde', phone: '362 455-0003' });
+  assert.equal(r.data.invite.canUse, true);
+  r = await fede.post('/api/client/referral', { code: r.data.client.referralCode });
+  assert.equal(r.status, 400, 'su propio código no vale');
+  assert.match(r.data.error, /propio/);
+  const slot = await slotFor(ctx.barber['Iván']);
+  assert.ok(slot, 'hay horario libre');
+  r = await fede.post('/api/client/book', { serviceId: ctx.svc.Corte, day: DAY2, time: slot.time, barberId: ctx.barber['Iván'], payment: 'efectivo' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.appointment.finalPrice, 16000);
+  const fedeAppt = r.data.appointment.id;
+  r = await fede.post('/api/client/referral', { code: 'nada99' });
+  assert.equal(r.status, 400);
+  r = await fede.post('/api/client/referral', { code: ctx.anaCode });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.match(r.data.notice, /Ana/);
+  assert.equal(r.data.upcoming[0].finalPrice, 12800, '20% aplicado al turno que ya tenía');
+  assert.equal(r.data.invite.canUse, false);
+  r = await fede.post('/api/client/referral', { code: ctx.anaCode });
+  assert.equal(r.status, 409);
+  assert.equal((await fede.post('/api/client/cancel', { id: fedeAppt })).status, 200);
+
+  // Si borra la cuenta y la vuelve a crear con el mismo teléfono, el 20% no se repite
+  assert.equal((await diego.post('/api/client/delete', { confirm: true })).status, 200);
+  r = await agent().post('/api/client/register', { name: 'Diego Nuevo', phone: '3624550001', ref: ctx.anaCode });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.code, 'ref_not_new');
+  const again = agent();
+  r = await again.post('/api/client/register', { name: 'Diego Nuevo', phone: '3624550001' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.invite.canUse, false, 'ya fue cliente: no tiene la opción');
+  const [row] = await sql`select count(*)::int as n from former_clients`;
+  assert.ok(row.n >= 1, 'queda la huella del teléfono');
+  const [plain] = await sql`select count(*)::int as n from former_clients where phone_hash like '%4550001%'`;
+  assert.equal(plain.n, 0, 'no se guarda el número');
 });
 
 test('seguridad: CSRF y freno a intentos', async () => {

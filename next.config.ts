@@ -2,6 +2,9 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Las pantallas del cliente son de navegador (traen sus datos por /api): al ir y volver entre
+  // pestañas se reusa lo que ya bajó en vez de volver a pedirle la página al servidor
+  experimental: { staleTimes: { dynamic: 60, static: 300 } },
   async headers() {
     return [
       {

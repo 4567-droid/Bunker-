@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp, type Appt } from '@/components/client/app-context';
-import { AuthFields, authValid, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
+import { AuthFields, authProblem, cleanCode, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
 import { Avatar, Chip, Dot, ErrorNote, GhostButton, GREEN, Kicker, OptionRow, RED, SummaryRow, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
-import { money, PAYMENTS, type Payment } from '@/lib/format';
+import { areaFromWhatsapp, money, PAYMENTS, type Payment } from '@/lib/format';
 import { DAY_SHORT, dayLabel, dow } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 
@@ -40,9 +40,11 @@ export default function Turno() {
   const [booked, setBooked] = useState<Appt | null>(null);
   const [waSent, setWaSent] = useState(false);
   const [slotsKey, setSlotsKey] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const service = config.services.find((s) => s.id === draft.serviceId) ?? null;
   const registered = !!me?.client;
+  const upcoming = (me?.upcoming ?? []).filter((a) => a.status === 'booked');
 
   // ?paso=N desde la portada
   useEffect(() => {
@@ -94,7 +96,9 @@ export default function Turno() {
   const timeOk = !!slot;
   const barberOk = timeOk && !!barber && slot!.free.includes(barber.id);
   const payOk = !!draft.payment;
-  const formOk = registered || authValid(mode, form);
+  const area = areaFromWhatsapp(biz.whatsapp);
+  const formProblem = registered ? null : authProblem(mode, form, area);
+  const formOk = !formProblem;
   const can: Record<number, boolean> = {
     1: !!service,
     2: timeOk,
@@ -108,7 +112,7 @@ export default function Turno() {
   const discount = useMemo(() => {
     if (!service) return null;
     if (registered && quote && quote.discountPct > 0) return { pct: quote.discountPct, reason: quote.reason ?? '', final: quote.finalPrice };
-    if (!registered && referral && mode === 'register') {
+    if (!registered && referral && mode === 'register' && cleanCode(form.ref) === referral.code) {
       return {
         pct: referral.percent,
         reason: `${referral.percent}% de bienvenida (te invitó ${referral.name})`,
@@ -116,7 +120,7 @@ export default function Turno() {
       };
     }
     return null;
-  }, [service, registered, quote, referral, mode]);
+  }, [service, registered, quote, referral, mode, form.ref]);
   const servicePrice = discount ? discount.final : (service?.price ?? 0);
   const payName = (p: Payment | null) => (p ? PAYMENTS[p].name : '—');
   const payDesc = (p: Payment) =>
@@ -140,8 +144,9 @@ export default function Turno() {
     setError(null);
     try {
       if (!registered) {
-        const m = await submitAuth(mode, form, mode === 'register' ? referral?.code : null);
+        const m = await submitAuth(mode, form, area);
         setMe(m);
+        setNotice(m.notice ?? null);
         if (mode === 'register') clearReferral();
       }
       const r = await api<{ appointment: Appt }>('/api/client/book', {
@@ -160,7 +165,9 @@ export default function Turno() {
       window.scrollTo({ top: 0 });
     } catch (e) {
       setError((e as Error).message);
-      setSlotsKey((k) => k + 1);
+      const code = (e as Error & { code?: string }).code;
+      if (code === 'needs_email') setMode('login');
+      else if (code !== 'bad_ref' && code !== 'ref_not_new') setSlotsKey((k) => k + 1);
     } finally {
       setBusy(false);
     }
@@ -168,6 +175,7 @@ export default function Turno() {
 
   async function changeBooking() {
     if (!booked) return;
+    if (!window.confirm('Se libera este horario para que elijas otro. ¿Seguimos?')) return;
     setBusy(true);
     try {
       await api('/api/client/cancel', { id: booked.id });
@@ -218,6 +226,7 @@ export default function Turno() {
             Total {money(booked.total)}
             {booked.discountReason ? ` · ${booked.discountReason}` : ''}
           </span>
+          {notice && <span className="text-sm text-accent">{notice}</span>}
           {booked.payment === 'transferencia' && biz.transferAlias && booked.total > 0 && (
             <div className="flex items-center justify-between gap-3 rounded-[14px] bg-field px-4 py-3">
               <span className="flex min-w-0 flex-col">
@@ -276,6 +285,32 @@ export default function Turno() {
 
   // ------------------------------------------------------------- asistente
   const primaryOk = can[step];
+  /** Por qué no se puede seguir (se muestra al tocar el botón gris) */
+  function whyNot(): { text: string; goTo?: number } | null {
+    if (!service) return { text: 'Elegí un servicio.', goTo: 1 };
+    if (step === 1) return null;
+    if (!draft.day || !draft.time) return { text: 'Elegí el día y el horario.', goTo: 2 };
+    if (!slots) return { text: 'Estamos buscando los horarios libres, esperá un segundo.' };
+    if (!timeOk) return { text: `El horario de las ${draft.time} ya no está libre. Elegí otro.`, goTo: 2 };
+    if (step === 2) return null;
+    if (!barberOk) return { text: barber ? `${barber.name} ya no está libre a esa hora. Elegí otro barbero u otro horario.` : 'Elegí un barbero.', goTo: 3 };
+    if (step === 3) return null;
+    if (!payOk) return { text: 'Elegí cómo vas a pagar.', goTo: 4 };
+    if (step === 4) return null;
+    if (formProblem) return { text: formProblem };
+    return null;
+  }
+  function primary() {
+    if (busy) return;
+    if (!primaryOk) {
+      const w = whyNot();
+      setError(w?.text ?? 'Completá este paso para seguir.');
+      if (w?.goTo && w.goTo < step) setStep(w.goTo);
+      return;
+    }
+    if (step < 5) go(step + 1);
+    else reserve();
+  }
   return (
     <div className="flex flex-col gap-[18px] px-4 pt-7 pb-6">
       <div className="flex flex-col gap-2.5 px-1">
@@ -293,6 +328,20 @@ export default function Turno() {
           ))}
         </div>
       </div>
+
+      {step === 1 && upcoming.length > 0 && (
+        <Link href="/cuenta" className="flex flex-col gap-0.5 rounded-2xl border border-line-2 bg-card px-4 py-3">
+          <span className="text-sm font-light text-muted">{upcoming.length > 1 ? 'Ya tenés 2 turnos' : 'Ya tenés turno'}</span>
+          {upcoming.map((a) => (
+            <span key={a.id} className="text-[15px] font-medium">
+              {a.dayLabel} · {a.time} con {a.barberName}
+            </span>
+          ))}
+          <span className="text-[13px] font-light text-muted">
+            {upcoming.length > 1 ? 'Para sacar otro, cancelá uno desde Cuenta →' : 'Podés sacar otro más. Verlo en Cuenta →'}
+          </span>
+        </Link>
+      )}
 
       <div className="fade-in flex flex-col gap-2.5" key={step}>
         {step === 1 &&
@@ -431,6 +480,7 @@ export default function Turno() {
                 values={form}
                 setValues={setForm}
                 idPrefix="t"
+                area={area}
                 title={mode === 'register' ? 'Tus datos, solo la primera vez' : 'Ingresá con tu teléfono'}
               />
             )}
@@ -438,25 +488,30 @@ export default function Turno() {
         )}
       </div>
 
-      <ErrorNote text={error} />
-
-      <div className="grid grid-cols-[1fr_2fr] gap-2.5">
-        <button
-          type="button"
-          onClick={() => go(Math.max(1, step - 1))}
-          disabled={step === 1}
-          className={`min-h-14 rounded-full border border-line-2 bg-transparent text-base font-medium ${step === 1 ? 'text-off' : 'text-ink'}`}
-        >
-          Atrás
-        </button>
-        <button
-          type="button"
-          onClick={() => (step < 5 ? go(step + 1) : reserve())}
-          disabled={!primaryOk || busy}
-          className={`min-h-14 rounded-full border-0 text-[17px] font-semibold ${primaryOk && !busy ? 'bg-accent text-bg' : 'bg-line text-dim'}`}
-        >
-          {busy ? 'Reservando…' : step < 5 ? 'Siguiente →' : 'Reservar turno'}
-        </button>
+      {/* Atrás / Siguiente quedan siempre a mano, arriba del menú */}
+      <div
+        className="sticky z-10 -mx-4 flex flex-col gap-2.5 bg-gradient-to-t from-bg from-70% to-transparent px-4 pt-4 pb-3"
+        style={{ bottom: 'calc(69px + env(safe-area-inset-bottom))' }}
+      >
+        <ErrorNote text={error} />
+        <div className="grid grid-cols-[1fr_2fr] gap-2.5">
+          <button
+            type="button"
+            onClick={() => go(Math.max(1, step - 1))}
+            disabled={step === 1}
+            className={`min-h-14 rounded-full border border-line-2 bg-transparent text-base font-medium ${step === 1 ? 'text-off' : 'text-ink'}`}
+          >
+            Atrás
+          </button>
+          <button
+            type="button"
+            onClick={primary}
+            disabled={busy}
+            className={`min-h-14 rounded-full border-0 text-[17px] font-semibold ${primaryOk && !busy ? 'bg-accent text-bg' : 'bg-line text-dim'}`}
+          >
+            {busy ? 'Reservando…' : step < 5 ? 'Siguiente →' : 'Reservar turno'}
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-dashed border-line-2 px-4 py-3.5 text-sm font-light">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BottomNav,
   Chip,
@@ -150,15 +150,23 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
 
   const today = agenda?.today ?? initialToday;
 
+  const applyAgenda = useCallback((a: Agenda) => {
+    setAgenda(a);
+    setSel((s) => (s && a.rows.some((r) => r.id === s) ? s : (a.rows.find((r) => r.status === 'in_progress' || r.status === 'booked')?.id ?? a.rows[0]?.id ?? null)));
+  }, []);
+
+  // Cuenta las acciones: si una pasó mientras se consultaba, esa consulta llega vieja y no se usa
+  const actions = useRef(0);
+
   const loadAgenda = useCallback(async (d: string) => {
+    const at = actions.current;
     try {
       const a = await api<Agenda>(`/api/barber/agenda?day=${d}`);
-      setAgenda(a);
-      setSel((s) => (s && a.rows.some((r) => r.id === s) ? s : (a.rows.find((r) => r.status === 'in_progress' || r.status === 'booked')?.id ?? a.rows[0]?.id ?? null)));
+      if (at === actions.current) applyAgenda(a);
     } catch (e) {
       if ((e as Error).message.includes('ingresar')) onLogout();
     }
-  }, [onLogout]);
+  }, [applyAgenda, onLogout]);
 
   const loadQueue = useCallback(async () => {
     try {
@@ -168,34 +176,60 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
     }
   }, []);
 
+  // Se actualiza solo cada tanto mientras la pantalla está a la vista, y apenas vuelve
+  // (por ejemplo, después de mandar un WhatsApp)
   useEffect(() => {
     loadAgenda(day);
-    const t = setInterval(() => loadAgenda(day), 30_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => document.visibilityState === 'visible' && loadAgenda(day), 30_000);
+    const onVis = () => document.visibilityState === 'visible' && loadAgenda(day);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [day, loadAgenda]);
 
   useEffect(() => {
     loadQueue();
-    const t = setInterval(loadQueue, 15_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => document.visibilityState === 'visible' && loadQueue(), 15_000);
+    const onVis = () => document.visibilityState === 'visible' && loadQueue();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [loadQueue]);
 
+  // La respuesta de cada acción ya trae la agenda y la fila nuevas (?view=día): un solo viaje
   async function act(path: string, body: Record<string, unknown>, okText?: string, after?: () => void) {
+    const me = ++actions.current;
     setBusy(true);
     setError(null);
     setOk(null);
     try {
-      const r = await api<Record<string, unknown>>(path, body);
+      const r = await api<Record<string, unknown> & { agenda?: Agenda; queue?: Queue }>(`${path}?view=${day}`, body);
+      if (me === actions.current) {
+        if (r.agenda) applyAgenda(r.agenda);
+        if (r.queue) setQueue(r.queue);
+      }
       if (okText) setOk(okText);
       after?.();
-      await Promise.all([loadAgenda(day), loadQueue()]);
+      if (!r.agenda) await Promise.all([loadAgenda(day), loadQueue()]);
       return r;
     } catch (e) {
       setError((e as Error).message);
+      loadAgenda(day);
       return null;
     } finally {
       setBusy(false);
     }
+  }
+
+  // Libre / Ocupado: cambia en pantalla al instante y se guarda atrás
+  async function setStatus(s: 'free' | 'busy') {
+    if (state === s || state === 'cutting') return;
+    setAgenda((a) => (a ? { ...a, status: { state: s, freeInMin: null } } : a));
+    await act('/api/barber/status', { state: s });
   }
 
   async function complete(id?: string) {
@@ -433,9 +467,8 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
                     <button
                       key={s}
                       type="button"
-                      disabled={busy}
                       aria-pressed={state === s}
-                      onClick={() => act('/api/barber/status', { state: s })}
+                      onClick={() => setStatus(s)}
                       className="flex min-h-16 items-center justify-center gap-2.5 rounded-[18px] border-[1.5px] text-base font-medium text-ink"
                       style={{
                         borderColor: state === s ? (s === 'free' ? GREEN : RED) : '#2A2A27',

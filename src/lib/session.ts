@@ -1,7 +1,7 @@
 import 'server-only';
-import { readSession } from './auth';
+import { sessionTokenHash } from './auth';
 import type { Business } from './business';
-import { systemTx, tenantTx } from './db';
+import { db } from './db';
 import { fail } from './http';
 
 export interface ClientRow {
@@ -30,10 +30,14 @@ export interface StaffRow {
   active: boolean;
 }
 
+// Sesión + persona en una sola consulta (antes eran dos transacciones): cada ida a la base cuenta.
 export async function currentClient(biz: Business): Promise<ClientRow | null> {
-  const s = await readSession('client');
-  if (!s?.client_id || s.business_id !== biz.id) return null;
-  const rows = await tenantTx(biz.id, (tx) => tx<ClientRow[]>`select * from clients where id = ${s.client_id}`);
+  const hash = await sessionTokenHash('client');
+  if (!hash) return null;
+  const rows = await db()<ClientRow[]>`
+    select c.* from sessions s join clients c on c.id = s.client_id
+    where s.token_hash = ${hash} and s.kind = 'client' and s.expires_at > now()
+      and s.business_id = ${biz.id} and c.business_id = ${biz.id}`;
   return rows[0] ?? null;
 }
 
@@ -44,12 +48,12 @@ export async function requireClient(biz: Business): Promise<ClientRow> {
 }
 
 export async function currentStaff(): Promise<StaffRow | null> {
-  const s = await readSession('staff');
-  if (!s?.staff_id) return null;
-  const rows = await systemTx(
-    (tx) => tx<StaffRow[]>`select id, business_id, role, name, username, instagram, active
-                           from staff where id = ${s.staff_id} and active`,
-  );
+  const hash = await sessionTokenHash('staff');
+  if (!hash) return null;
+  const rows = await db()<StaffRow[]>`
+    select st.id, st.business_id, st.role, st.name, st.username, st.instagram, st.active
+    from sessions s join staff st on st.id = s.staff_id
+    where s.token_hash = ${hash} and s.kind = 'staff' and s.expires_at > now() and st.active`;
   return rows[0] ?? null;
 }
 

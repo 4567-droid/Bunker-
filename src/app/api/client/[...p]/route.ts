@@ -1,4 +1,4 @@
-import { newReferralCode } from '@/lib/clients';
+import { BAD_CODE, findReferrer, inviteBlock, newReferralCode, normalizeCode, NOT_NEW, rememberFormerClient, wasClientBefore } from '@/lib/clients';
 import { clientIp, endSession, endSessionsFor, guardAttempts, recordFailure, startSession } from '@/lib/auth';
 import {
   apptDto,
@@ -15,17 +15,17 @@ import {
 } from '@/lib/booking';
 import { currentBusiness, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
-import { firstName, isEmail, money, normalizePhone, phoneDisplay } from '@/lib/format';
+import { areaFromWhatsapp, firstName, isEmail, money, normalizePhone, phoneDisplay } from '@/lib/format';
 import { fail, json, notFound, readBody, route, str } from '@/lib/http';
 import { nextIsFree } from '@/lib/rules';
 import { currentClient, requireClient, type ClientRow } from '@/lib/session';
-import { dayLabel, isOpenAt, zonedToUtc, type Now } from '@/lib/time';
+import { dayLabel, fmtMin, isOpenAt, zonedToUtc, type Now } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
-function readPhone(raw: string): string {
-  const phone = normalizePhone(raw);
-  if (!phone) fail(400, 'Revisá el teléfono: código de área y número, sin 0 ni 15. Ej: 362 549-3647');
+function readPhone(raw: string, biz: Business): string {
+  const phone = normalizePhone(raw, areaFromWhatsapp(biz.whatsapp));
+  if (!phone) fail(400, 'Revisá el teléfono: tiene que tener entre 6 y 15 números. Ej: 362 412-3456');
   return phone;
 }
 
@@ -55,6 +55,9 @@ async function mePayload(tx: Tx, biz: Business, c: ClientRow, now: Now) {
     from appointments a join staff s on s.id = a.barber_id
     where a.client_id = ${c.id} and a.status in ('completed', 'no_show')
     order by a.day desc, a.start_min desc limit 10`;
+  // Invitación: si todavía puede cargar el código de un amigo, y quién lo invitó
+  const [by] = c.referred_by ? await tx<{ name: string }[]>`select name from clients where id = ${c.referred_by}` : [];
+  const invite = { canUse: (await inviteBlock(tx, biz, c)) === null, by: by ? firstName(by.name) : null, percent: biz.referral_percent };
   let queue = null;
   if (entry) {
     const [{ ahead }] = await tx<{ ahead: number }[]>`
@@ -103,8 +106,50 @@ async function mePayload(tx: Tx, biz: Business, c: ClientRow, now: Now) {
       from: r.source_name ? firstName(r.source_name) : null,
     })),
     referrals: ref,
+    invite,
     queue,
   };
+}
+
+/**
+ * Carga el código de invitación de un amigo: crea el 20% de bienvenida y, si ya tiene un turno
+ * reservado, se lo aplica a ese turno. Una sola vez y solo si nunca se cortó en el local.
+ */
+async function useInvite(tx: Tx, biz: Business, c: ClientRow, rawCode: unknown) {
+  const code = normalizeCode(rawCode);
+  if (!code) fail(400, 'Escribí el código de invitación.');
+  const referrer = await findReferrer(tx, biz.id, code);
+  if (!referrer) fail(400, BAD_CODE, 'bad_ref');
+  if (referrer.id === c.id) fail(400, 'Ese es tu propio código: pasáselo a un amigo.');
+  if (referrer.referred_by === c.id) fail(409, 'Ese amigo entró con tu código: no pueden usar el código uno del otro.');
+  const [fresh] = await tx<ClientRow[]>`select * from clients where id = ${c.id} for update`;
+  const why = await inviteBlock(tx, biz, fresh);
+  if (why) fail(409, why);
+  await tx`update clients set referred_by = ${referrer.id} where id = ${c.id}`;
+  const [reward] = await tx<{ id: string }[]>`
+    insert into rewards (business_id, client_id, kind, percent, source_client_id)
+    values (${biz.id}, ${c.id}, 'welcome', ${biz.referral_percent}, ${referrer.id}) returning id`;
+  // Si ya reservó, el descuento va a ese turno (el próximo que no tenga otro descuento)
+  const [next] = await tx<ApptRow[]>`
+    select * from appointments
+    where client_id = ${c.id} and status = 'booked' and reward_id is null and not loyalty_free
+      and discount_pct = 0 and price > 0
+    order by day, start_min limit 1 for update`;
+  if (next) {
+    const pct = biz.referral_percent;
+    await tx`update appointments
+             set discount_pct = ${pct}, discount_reason = ${`${pct}% de bienvenida (te invitó un amigo)`},
+                 final_price = ${Math.round((next.price * (100 - pct)) / 100)}, reward_id = ${reward.id}
+             where id = ${next.id}`;
+    await tx`update rewards set status = 'reserved', appointment_id = ${next.id} where id = ${reward.id}`;
+  }
+  return { name: firstName(referrer.name), appliedTo: next ? `${dayLabel(next.day)} ${fmtMin(next.start_min)}` : null };
+}
+
+async function currentClientById(id: string): Promise<ClientRow | null> {
+  const biz = await currentBusiness();
+  const [c] = await tenantTx(biz.id, (tx) => tx<ClientRow[]>`select * from clients where id = ${id}`);
+  return c ?? null;
 }
 
 async function ownAppointment(tx: Tx, biz: Business, c: ClientRow, id: unknown) {
@@ -193,18 +238,46 @@ export const POST = route(async (req, [action]) => {
       await guardAttempts([`reg:${ip}`], 15, 60);
       const name = str(body, 'name', { min: 3, max: 80, label: 'el nombre y apellido' }).replace(/\s+/g, ' ');
       if (!/\S+\s+\S+/.test(name)) fail(400, 'Escribí tu nombre y apellido.');
-      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }));
+      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }), biz);
       const email = str(body, 'email', { optional: true, max: 120 }).toLowerCase();
       if (email && !isEmail(email)) fail(400, 'Revisá el correo electrónico.');
-      const ref = str(body, 'ref', { optional: true, max: 20 }).toUpperCase();
+      const ref = normalizeCode(str(body, 'ref', { optional: true, max: 30 }));
+
+      // Ya tenía cuenta con ese teléfono: entra como en "Ya tengo cuenta" (teléfono, y el correo si cargó uno)
+      const [existing] = await tenantTx(biz.id, (tx) => tx<ClientRow[]>`
+        select * from clients where business_id = ${biz.id} and phone = ${phone}`);
+      if (existing) {
+        const keys = [`cl:${ip}`, `cl:${biz.id}:${phone}`];
+        await guardAttempts(keys);
+        if (existing.email && existing.email.toLowerCase() !== email) {
+          await recordFailure(keys);
+          fail(409, 'Ese teléfono ya tiene cuenta. Para entrar, escribí el correo con el que te registraste.', 'needs_email');
+        }
+        await startSession('client', { businessId: biz.id, clientId: existing.id });
+        // Si trajo un código y todavía puede usarlo (nunca se cortó), se le aplica; si no, se le avisa
+        let notice: string | null = null;
+        if (ref) {
+          try {
+            const r = await tenantTx(biz.id, (tx) => useInvite(tx, biz, existing, ref));
+            notice = `Ya tenías cuenta: entraste. Te invitó ${r.name}: tenés ${biz.referral_percent}% en tu primer corte.`;
+          } catch (e) {
+            notice = `Ya tenías cuenta: entraste. ${(e as Error).message}`;
+          }
+        }
+        const fresh = (await currentClientById(existing.id)) ?? existing;
+        return json({ ...(await tenantTx(biz.id, (tx) => mePayload(tx, biz, fresh, now))), notice });
+      }
 
       const client = await tenantTx(biz.id, async (tx) => {
         const [exists] = await tx`select 1 from clients where business_id = ${biz.id} and phone = ${phone}`;
         if (exists) fail(409, 'Ese teléfono ya tiene cuenta. Tocá "Ya tengo cuenta" para entrar.');
         let referredBy: string | null = null;
         if (ref) {
-          const [r] = await tx<{ id: string }[]>`select id from clients where business_id = ${biz.id} and referral_code = ${ref}`;
-          referredBy = r?.id ?? null;
+          // Un código mal escrito no se ignora en silencio: se avisa para que lo corrija o lo borre
+          const r = await findReferrer(tx, biz.id, ref);
+          if (!r) fail(400, BAD_CODE, 'bad_ref');
+          if (await wasClientBefore(tx, biz.id, phone)) fail(409, `${NOT_NEW} Borrá el código para seguir.`, 'ref_not_new');
+          referredBy = r.id;
         }
         const code = await newReferralCode(tx, biz.id, name);
         const [c] = await tx<ClientRow[]>`
@@ -223,7 +296,7 @@ export const POST = route(async (req, [action]) => {
     }
 
     case 'login': {
-      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }));
+      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }), biz);
       const email = str(body, 'email', { optional: true, max: 120 }).toLowerCase();
       const ip = await clientIp();
       const keys = [`cl:${ip}`, `cl:${biz.id}:${phone}`];
@@ -307,11 +380,32 @@ export const POST = route(async (req, [action]) => {
         for (const a of open) await cancelAppointment(tx, a);
         // Los cortes viejos quedan para las cuentas del local, pero sin datos personales
         await tx`update appointments set client_name = 'Cliente eliminado', client_phone = null where client_id = ${c.id}`;
+        // Solo la huella del teléfono (no el número): así no vuelve a usar el 20% de invitación
+        await rememberFormerClient(tx, biz.id, c.phone);
         await tx`delete from clients where id = ${c.id}`;
       });
       await endSessionsFor({ clientId: c.id });
       await endSession('client');
       return json({ ok: true });
+    }
+
+    case 'referral': {
+      // Cargar el código de un amigo después de crear la cuenta (hasta el primer corte, una sola vez)
+      const c = await requireClient(biz);
+      const ip = await clientIp();
+      await guardAttempts([`ref:${ip}`]);
+      let used: { name: string; appliedTo: string | null };
+      try {
+        used = await tenantTx(biz.id, (tx) => useInvite(tx, biz, c, body.code));
+      } catch (e) {
+        if ((e as { code?: string }).code === 'bad_ref') await recordFailure([`ref:${ip}`]);
+        throw e;
+      }
+      const fresh = (await currentClientById(c.id)) ?? c;
+      return json({
+        ...(await tenantTx(biz.id, (tx) => mePayload(tx, biz, fresh, now))),
+        notice: `Listo: te invitó ${used.name}. Tenés ${biz.referral_percent}% en tu primer corte${used.appliedTo ? ` (ya aplicado a tu turno del ${used.appliedTo.toLowerCase()})` : ''}.`,
+      });
     }
 
     case 'confirm': {
