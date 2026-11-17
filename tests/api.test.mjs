@@ -776,10 +776,19 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   const demoId = r.data.id;
   const pubDemo = agent({ 'x-bk-biz': 'demo' });
   const cfg = await pubDemo.get('/api/public/config');
+  const cfgBunker = await pub.get('/api/public/config');
   assert.equal(cfg.data.business.name, 'Navaja Barber Club');
-  assert.equal(cfg.data.business.accent, '#5BC0EB');
-  assert.deepEqual(cfg.data.barbers.map((b) => b.name), ['Lucas', 'Tomi']);
-  assert.equal(cfg.data.services.length, 4);
+  // Es una copia de Bunker con otro nombre: mismo color, servicios, precios y tarjeta; 3 barberos
+  assert.equal(cfg.data.business.accent, cfgBunker.data.business.accent);
+  assert.deepEqual(
+    cfg.data.services.map((x) => [x.name, x.duration, x.price]),
+    cfgBunker.data.services.map((x) => [x.name, x.duration, x.price]),
+  );
+  assert.equal(cfg.data.business.loyaltyGoal, cfgBunker.data.business.loyaltyGoal);
+  assert.equal(cfg.data.business.referralPercent, cfgBunker.data.business.referralPercent);
+  assert.deepEqual(cfg.data.barbers.map((b) => b.name), ['Lucas', 'Tomi', 'Fede']);
+  assert.equal(cfg.data.business.whatsapp, null, 'no copia el WhatsApp de Bunker');
+  assert.notEqual(cfg.data.business.address, cfgBunker.data.business.address, 'ni la dirección');
   const list = await admin.get('/api/admin/businesses');
   const demo = list.data.businesses.find((b) => b.slug === 'demo');
   assert.equal(demo.status, 'demo');
@@ -795,9 +804,12 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   assert.ok(months.data.months.some((m) => m.income > 0 && m.expense > 0));
   const cl = await demoOwner.get(`/api/owner/clients?q=${encodeURIComponent('Pérez')}`);
   assert.equal(cl.data.total, 0, 'no ve clientes de Bunker');
-  const lucas = agent({ 'x-bk-biz': 'demo' });
-  assert.equal((await lucas.post('/api/staff/login', { role: 'barber', username: 'lucas', password: '1111' })).status, 200);
-  assert.equal((await lucas.get('/api/barber/agenda')).status, 200);
+  for (const [name, code] of [['Lucas', '1111'], ['Tomi', '2222'], ['Fede', '3333']]) {
+    const b = agent({ 'x-bk-biz': 'demo' });
+    assert.equal((await b.post('/api/staff/login', { role: 'barber', username: name, password: code })).status, 200, `entra ${name}`);
+    const ag = await b.get('/api/barber/agenda');
+    assert.equal(ag.data.barber.name, name, 'cada barbero ve su propio panel');
+  }
   assert.equal((await agent().post('/api/staff/login', { role: 'owner', username: 'demo', password: 'demo1234' })).status, 401, 'en Bunker no existe');
 
   // "Dejar como nueva": borra lo que cargaron al probar, conserva el negocio, y cierra las sesiones de la muestra

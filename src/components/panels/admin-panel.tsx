@@ -250,7 +250,8 @@ function DemoCard({ demo, save }: { demo: Biz | null; save: (p: string, body: Re
         <span className="text-sm font-light text-muted">{demo.clients} clientes de ejemplo</span>
       </span>
       <span className="text-sm font-light text-muted">
-        Para mostrarle el sistema a otros negocios. Es un negocio aparte: lo que hagan ahí no toca a Bunker.
+        Copia de Bunker con otro nombre, para mostrarle el sistema a otros negocios. Es un negocio aparte: lo que hagan ahí
+        no toca a Bunker. Al dejarla como nueva vuelve a copiar precios y configuración de Bunker.
       </span>
       <div className="flex flex-col gap-2">
         {links.map((l) => (

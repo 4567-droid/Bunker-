@@ -235,14 +235,16 @@ Varios negocios y negocio de muestra (migración `006_negocio_demo.sql`):
   dueño; arranca con servicios de ejemplo y horarios, y el dueño termina de configurarlo en su Central → Ajustes
   (barberos, precios, productos, premio de la tarjeta). Nada queda atado a Bunker: textos, color e ícono son de
   cada negocio (sin logo, ícono neutro `public/brand/turnos-*`).
-- Negocio de muestra "Navaja Barber Club" (slug `demo`, estado `demo`, color celeste) en
-  `turnos-navaja-demo.vercel.app` (dirección agregada al proyecto de Vercel). Lo arma la función SQL
-  `demo_business(reset)`: 2 barberos, 4 servicios, 3 productos, 120 clientes (teléfonos 362 0…, que no existen),
-  4 meses de cortes, gastos e ingresos, y turnos para los próximos días. Accesos públicos a propósito:
-  Central `demo` / `demo1234`; barberos Lucas `1111` y Tomi `2222` (`src/lib/demo.ts`).
+- Negocio de muestra "Navaja Barber Club" (slug `demo`, estado `demo`) en `turnos-navaja-demo.vercel.app`
+  (dirección agregada al proyecto de Vercel). Es una **copia de Bunker con otro nombre** (migración 007): copia de
+  Bunker el color, horarios, reglas, servicios y precios, productos, tarjeta e invitación; nunca sus clientes,
+  turnos, teléfonos, dirección, WhatsApp ni alias. Lo arma la función SQL `demo_business(reset)`: 3 barberos,
+  120 clientes (teléfonos 362 0…, que no existen), 4 meses de cortes, gastos e ingresos, y turnos para los próximos
+  días. Accesos públicos a propósito: Central `demo` / `demo1234`; barberos Lucas `1111`, Tomi `2222` y
+  Fede `3333` (`src/lib/demo.ts`).
 - Se crea sola en cada publicación si no existe (`prepare` en Vercel; `DEMO_BUSINESS=off` lo apaga). En /admin hay
-  una tarjeta con sus links, los accesos y "Dejar la muestra como nueva" (borra lo que cargaron al probar y vuelve a
-  armar los turnos desde hoy, conservando nombre, color, logo, WhatsApp y dirección). Local: `node scripts/db.mjs demo [--reset]`.
+  una tarjeta con sus links, los accesos y "Dejar la muestra como nueva" (borra lo que cargaron al probar, vuelve a
+  copiar la configuración de Bunker y arma los turnos desde hoy; conserva nombre, logo, WhatsApp y dirección web). Local: `node scripts/db.mjs demo [--reset]`.
 - La muestra nunca es el negocio por defecto: sin dominio ni `?negocio=`, se muestra Bunker.
 
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
