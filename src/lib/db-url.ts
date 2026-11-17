@@ -4,23 +4,35 @@
 // (también "host: ..." en varias líneas). Siempre devuelve una URL.
 // Copia en scripts/db.mjs: si cambiás algo acá, cambialo allá.
 
-export function normalizeDbUrl(raw: string): string {
+const SIN_CLAVE =
+  'DATABASE_URL: falta la contraseña de la base. Cargala en Vercel como DATABASE_PASSWORD ' +
+  '(Settings → Environment Variables) y volvé a publicar. Si no la recordás: Supabase → Project Settings → Database → Reset database password.';
+
+/** @param fallbackPassword contraseña aparte (DATABASE_PASSWORD o POSTGRES_PASSWORD), por si la dirección no la trae */
+export function normalizeDbUrl(raw: string, fallbackPassword = ''): string {
   const s = raw.trim().replace(/^["']|["']$/g, '');
-  if (/YOUR-PASSWORD/i.test(s)) {
-    throw new Error('DATABASE_URL todavía dice [YOUR-PASSWORD]: reemplazalo por la contraseña de la base (Supabase → Connect).');
+  const fb = fallbackPassword.trim();
+  const isPlaceholder = (p: string) => !p || /YOUR-PASSWORD/i.test(p);
+  const m = /^(postgres(?:ql)?:\/\/)([^:@/]+)(?::([^@/]*))?@(.+)$/i.exec(s);
+  if (m) {
+    const pass = m[3] ?? '';
+    if (!isPlaceholder(pass)) return s;
+    if (!fb) throw new Error(SIN_CLAVE);
+    return `${m[1]}${m[2]}:${encodeURIComponent(fb)}@${m[4]}`;
   }
   if (/^postgres(ql)?:\/\//i.test(s)) return s;
   const kv: Record<string, string> = {};
-  for (const m of s.matchAll(/([A-Za-z_]+)\s*[=:]\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g)) {
-    kv[m[1].toLowerCase()] = m[2] ?? m[3] ?? m[4] ?? '';
+  for (const x of s.matchAll(/([A-Za-z_]+)\s*[=:]\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g)) {
+    kv[x[1].toLowerCase()] = x[2] ?? x[3] ?? x[4] ?? '';
   }
   const host = kv.host ?? kv.hostname;
   if (!host) {
     throw new Error('DATABASE_URL no tiene el formato esperado: pegá la dirección que empieza con postgresql:// (Supabase → Connect → Transaction pooler).');
   }
   const user = kv.user ?? kv.username ?? 'postgres';
-  const pass = kv.password ?? kv.pass ?? '';
-  if (!pass) throw new Error('DATABASE_URL: falta la contraseña de la base.');
+  let pass = kv.password ?? kv.pass ?? '';
+  if (isPlaceholder(pass)) pass = fb;
+  if (!pass) throw new Error(SIN_CLAVE);
   const port = kv.port ?? '5432';
   const db = kv.database ?? kv.dbname ?? 'postgres';
   const q = kv.sslmode ? `?sslmode=${encodeURIComponent(kv.sslmode)}` : '';

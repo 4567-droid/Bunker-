@@ -96,6 +96,8 @@ Si en tu cuenta no aparece esa opción, o te pide tarjeta, usá el **otro**: son
 ### Para los dos caminos
 
 - Si falta alguna clave, la publicación se frena y el registro dice cuál ("Falta OWNER_PASSWORD..."). Cargala y **Redeploy**.
+- `DATABASE_URL` se acepta tal cual la muestra Supabase, en formato `postgresql://...` o como bloque
+  `host=... port=...`. Si no trae la contraseña, cargala aparte como `DATABASE_PASSWORD`.
 - Las publicaciones siguientes no tocan los datos: solo aplican cambios nuevos de tablas, si los hay.
 - Las cuatro claves iniciales se usan una sola vez; después de la primera publicación las podés borrar de Vercel
   (cada uno cambia la suya desde la web: el dueño en **/central → Ajustes**, el admin al pie de **/admin**, los barberos en **/barbero → Clientes**).
