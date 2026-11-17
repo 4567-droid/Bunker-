@@ -48,8 +48,10 @@ html[data-theme='natural'] {
   --color-pick: color-mix(in srgb, var(--accent) 12%, #111A10);
 }
 
-/* Estilo "claro" (en /admin, "App"): como una aplicación. Fondo gris muy claro, tarjetas blancas con sombra
-   suave, textos gris carbón y el color del negocio en degradé (la muestra: verde menta). */
+/* Estilos "App" (en /admin, "App claro" y "App oscuro"): armado de aplicación del celular (home-app.tsx).
+   Tarjetas sin borde con sombra suave y el color del negocio en degradé. --app-top es el bloque de arriba del Inicio. */
+
+/* App claro: fondo gris muy claro, tarjetas blancas y textos gris carbón */
 html[data-theme='claro'] {
   --color-bg: #F3F4F6;
   --color-hero: #FFFFFF;
@@ -68,6 +70,7 @@ html[data-theme='claro'] {
   --color-ok: #1F9D55;
   --color-bad: #D9452F;
   --app-shadow: 0 1px 2px rgb(16 24 40 / 4%), 0 8px 24px rgb(16 24 40 / 6%);
+  --app-top: #1E2128;
   color-scheme: light;
 }
 html[data-theme='claro'] input,
@@ -78,25 +81,66 @@ html[data-theme='claro'] textarea {
 html[data-theme='claro'] input[type="time"]::-webkit-calendar-picker-indicator {
   filter: none;
 }
-/* Botones y opciones elegidas: degradé del color del negocio (más claro a la izquierda) */
+/* Degradé más claro a la izquierda; los textos en el color del negocio, un poco más oscuros para leerse sobre blanco */
 html[data-theme='claro'] .bg-accent {
   background-image: linear-gradient(110deg, color-mix(in srgb, var(--accent) 78%, #FFFFFF), color-mix(in srgb, var(--accent) 88%, #000000));
 }
-/* Textos en el color del negocio, un poco más oscuros para que se lean sobre blanco */
 html[data-theme='claro'] .text-accent {
   color: color-mix(in srgb, var(--accent) 80%, #000000);
 }
-/* Tarjetas blancas sin borde y con sombra suave */
-html[data-theme='claro'] .bg-card {
+
+/* App oscuro: fondo casi negro, tarjetas gris oscuro y el color del negocio en un degradé que va oscureciendo */
+html[data-theme='oscuro'] {
+  --color-bg: #0F1114;
+  --color-hero: #15181C;
+  --color-card: #191C21;
+  --color-line: #262A31;
+  --color-line-2: #30353D;
+  --color-field: #22262C;
+  --color-ink: #ECEEF1;
+  --color-soft: #C8CCD3;
+  --color-muted: #969CA6;
+  --color-dim: #7B818C;
+  --color-faint: #5F6570;
+  --color-off: #454A53;
+  --color-dash: #383D46;
+  --color-pick: color-mix(in srgb, var(--accent) 15%, #191C21);
+  --color-ok: #3DBE78;
+  --color-bad: #EE5F4A;
+  --app-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 28px rgb(0 0 0 / 35%);
+  --app-top: linear-gradient(160deg, #1C2026 0%, #0B0D10 100%);
+}
+html[data-theme='oscuro'] .bg-accent {
+  background-image: linear-gradient(110deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #000000));
+}
+html[data-theme='oscuro'] .text-accent {
+  color: color-mix(in srgb, var(--accent) 82%, #FFFFFF);
+}
+/* Sobre el degradé, letras blancas */
+html[data-theme='oscuro'] .bg-accent.text-bg,
+html[data-theme='oscuro'] .bg-accent .text-bg {
+  color: #FFFFFF;
+}
+
+/* Lo que comparten los dos */
+html[data-theme='claro'] .bg-card,
+html[data-theme='oscuro'] .bg-card {
   box-shadow: var(--app-shadow);
 }
 html[data-theme='claro'] .bg-card.border-line {
   border-color: transparent;
 }
-/* Menú de abajo: blanco, flotando sobre el fondo */
-html[data-theme='claro'] [data-nav='bottom'] {
+html[data-theme='oscuro'] .bg-card.border-line {
+  border-color: rgb(255 255 255 / 4%);
+}
+/* Menú de abajo flotando sobre el fondo */
+html[data-theme='claro'] [data-nav='bottom'],
+html[data-theme='oscuro'] [data-nav='bottom'] {
   border-color: transparent;
   box-shadow: 0 -6px 24px rgb(16 24 40 / 7%);
+}
+html[data-theme='oscuro'] [data-nav='bottom'] {
+  box-shadow: 0 -8px 28px rgb(0 0 0 / 45%);
 }
 
 /* Estilos "natural" y "moderno": títulos con serifa (el "moderno" mantiene los colores del negocio) */

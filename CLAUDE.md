@@ -248,8 +248,8 @@ Varios negocios y negocio de muestra (migración `006_negocio_demo.sql`):
   copiar la configuración de Bunker y arma los turnos desde hoy; conserva nombre, logo, WhatsApp y dirección web). Local: `node scripts/db.mjs demo [--reset]`.
 - La muestra nunca es el negocio por defecto: sin dominio ni `?negocio=`, se muestra Bunker.
 
-Estilos de web por negocio (migraciones `008_estilo_natural.sql`, `009_estilo_moderno.sql` y `011_estilo_app.sql`,
-columna `businesses.theme`):
+Estilos de web por negocio (migraciones `008_estilo_natural.sql`, `009_estilo_moderno.sql`, `011_estilo_app.sql` y
+`012_app_oscuro.sql`, columna `businesses.theme`; la lista de estilos está en `src/lib/themes.ts`):
 
 - `moderno` (**Bunker hoy**, desde el 17/11/2026): el armado centrado con los colores del negocio (negro y amarillo):
   su logo arriba, título con serifa "Tu estilo, nuestra pasión.", línea amarilla, barra de reserva redonda con el botón
@@ -257,13 +257,16 @@ columna `businesses.theme`):
 - `clasico` (el primer diseño de Bunker): Jost, portada con el título a la izquierda (`home-classic.tsx`).
 - `natural` (inspirado en la estética de Bosco Barber Shop, sin usar su nombre, logo ni fotos):
   el mismo armado centrado en verde oscuro y dorado, con hojas.
-- `claro` (en /admin se llama **"App"**; **la muestra hoy**, desde el 17/11/2026, en verde menta `#10A383`): armado de
-  aplicación del celular (`home-app.tsx`). Fondo gris muy claro, tarjetas blancas sin borde con sombra suave, bloque
+- `claro` (en /admin, **"App claro"**): armado de aplicación del celular (`home-app.tsx`). Fondo gris muy claro, tarjetas blancas sin borde con sombra suave, bloque
   gris carbón arriba con el saludo y una tarjeta grande en degradé (próximo turno, la reserva empezada o "Turnos desde
   $X"), accesos rápidos con íconos, filas con cuadraditos de ícono (barberos, servicios, "Dónde estamos") y la tarjeta
   de fidelidad con barra de avance. Todo en `globals.css` (`html[data-theme='claro']`): el `bg-accent` pasa a degradé
   y el `text-accent` se oscurece un poco para leerse sobre blanco; los paneles y la Central también quedan claros.
   Los colores fijos de los paneles usan las variables (`var(--color-card)`, etc.) para servir en los dos modos.
+- `oscuro` (en /admin, **"App oscuro"**; **la muestra hoy**, desde el 17/11/2026, en verde menta `#10A383`): el mismo
+  armado de `claro` en tonos oscuros (Nicolás pidió "tonos más oscuros"): fondo `#0F1114`, tarjetas `#191C21`,
+  bloque de arriba en degradé gris oscuro a negro (`--app-top`) y el degradé del color yendo a más oscuro, con letras
+  blancas. `isAppTheme()` dice si un estilo usa el armado de aplicación.
 - `moderno` y `natural` comparten `home-centered.tsx` (variante por estilo) y, en la PC, el menú con links a la
   izquierda, la marca con serifa (Cormorant Garamond) en el medio y "Mi cuenta" + "Sacar turno" a la derecha.
 - Los colores de base de cada estilo están en `globals.css` (`html[data-theme='natural']`), así la web, los paneles

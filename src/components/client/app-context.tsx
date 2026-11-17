@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api, storage } from '@/lib/api-client';
 import type { Payment } from '@/lib/format';
 import type { PublicConfig } from '@/lib/public-config';
+import { isAppTheme } from '@/lib/themes';
 import Link from 'next/link';
 import { BottomNav, Icon, Scissors, type NavTab } from '@/components/ui';
 
@@ -288,11 +289,11 @@ export function ClientNav() {
   return (
     <>
       {/* PC: barra arriba con la marca, el menú y "Sacar turno" */}
-      <header className={`sticky top-0 z-30 order-first hidden border-b bg-hero/95 backdrop-blur md:block ${theme === 'claro' ? 'border-line shadow-[0_1px_12px_rgb(16_24_40/5%)]' : 'border-field'}`}>
+      <header className={`sticky top-0 z-30 order-first hidden border-b bg-hero/95 backdrop-blur md:block ${isAppTheme(theme) ? 'border-line shadow-[0_1px_12px_rgb(16_24_40/5%)]' : 'border-field'}`}>
         <div className="mx-auto flex h-16 max-w-[1080px] items-center gap-4 px-10 lg:gap-6">
           <Link href="/" className="flex items-center gap-3" aria-label="Inicio">
-            {theme === 'claro' ? (
-              // Estilo "App": la tijera en un cuadradito con el degradé del negocio
+            {isAppTheme(theme) ? (
+              // Estilos "App": la tijera en un cuadradito con el degradé del negocio
               <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-accent text-white">
                 <Scissors size={22} />
               </span>
@@ -309,7 +310,7 @@ export function ClientNav() {
                   key={t.id}
                   href={t.href ?? '/'}
                   aria-current={on ? 'page' : undefined}
-                  className={`inline-flex min-h-10 items-center gap-2 rounded-full px-3 text-sm whitespace-nowrap lg:px-4 ${on ? `font-semibold text-accent ${theme === 'claro' ? 'bg-pick' : ''}` : 'text-muted hover:text-ink'}`}
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-full px-3 text-sm whitespace-nowrap lg:px-4 ${on ? `font-semibold text-accent ${isAppTheme(theme) ? 'bg-pick' : ''}` : 'text-muted hover:text-ink'}`}
                 >
                   <Icon name={t.icon} size={18} />
                   {t.label}

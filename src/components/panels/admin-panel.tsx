@@ -383,7 +383,8 @@ const THEME_OPTIONS = [
   { id: 'moderno', label: 'Moderno', desc: 'Título centrado y barra de reserva, con el color del negocio (Bunker)', color: '#F5C400', base: '#1A1A18' },
   { id: 'clasico', label: 'Clásico', desc: 'Título a la izquierda y tarjeta de reserva (el primero)', color: '#F5C400', base: '#1A1A18' },
   { id: 'natural', label: 'Natural', desc: 'Verde oscuro, dorado y hojas', color: '#C9A66B', base: '#1C2819' },
-  { id: 'claro', label: 'App', desc: 'Claro, tarjetas blancas y degradé, como una app (la muestra)', color: '#10A383', base: '#F3F4F6' },
+  { id: 'oscuro', label: 'App oscuro', desc: 'Como una app, en tonos oscuros, con degradé del color (la muestra)', color: '#10A383', base: '#15181C' },
+  { id: 'claro', label: 'App claro', desc: 'Como una app, fondo claro y tarjetas blancas, con degradé del color', color: '#10A383', base: '#F3F4F6' },
 ];
 
 /** Elegir el estilo de la web. Si el color era el sugerido del estilo anterior, cambia al del nuevo. */

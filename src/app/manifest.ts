@@ -32,7 +32,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: asTheme(biz?.theme) === 'claro' ? '#F3F4F6' : '#0E0E0D',
+    background_color: asTheme(biz?.theme) === 'clasico' || asTheme(biz?.theme) === 'moderno' ? '#0E0E0D' : THEME_BAR[asTheme(biz?.theme)],
     theme_color: THEME_BAR[asTheme(biz?.theme)],
     icons,
   };

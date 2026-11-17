@@ -1,6 +1,7 @@
 'use client';
 
-// Inicio del estilo "claro" (en /admin, "App"): armado como una aplicación del celular.
+// Inicio de los estilos "claro" y "oscuro" (en /admin, "App claro" y "App oscuro"): armado como una aplicación
+// del celular. Los colores salen de globals.css (el bloque de arriba usa --app-top).
 //  - Arriba un bloque gris carbón con el saludo y, encima, una tarjeta grande en degradé con el próximo turno
 //    (o "Reservá tu turno").
 //  - Accesos rápidos en cuadraditos con íconos, y listas en tarjetas blancas: barberos ahora, servicios,
@@ -83,7 +84,11 @@ function HeroCard() {
       <p className="relative m-0 mt-1 text-[27px] leading-tight font-semibold">{title}</p>
       <p className="relative m-0 mt-1 max-w-[300px] text-[15px] font-light text-white/90">{sub}</p>
       <div className="relative mt-5 flex items-center justify-between gap-3">
-        <Link href={cta.href} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-white px-5 text-[15px] font-semibold text-accent">
+        <Link
+          href={cta.href}
+          className="inline-flex min-h-12 items-center gap-2 rounded-full bg-white px-5 text-[15px] font-semibold"
+          style={{ color: 'color-mix(in srgb, var(--accent) 78%, #000)' }}
+        >
           {cta.label}
           <Icon name="chevron" size={18} stroke={2.2} />
         </Link>
@@ -125,8 +130,11 @@ export function HomeApp() {
   return (
     <div className="flex flex-col pb-4">
       <div className="mx-auto w-full md:max-w-[1080px] md:px-10 md:pt-6">
-        {/* Bloque gris carbón con el saludo */}
-        <section className="relative overflow-hidden rounded-b-[32px] bg-ink px-5 pt-5 pb-[92px] text-white md:rounded-[32px] md:px-8 md:pt-7 md:pb-[100px] lg:pb-8">
+        {/* Bloque oscuro con el saludo */}
+        <section
+          className="relative overflow-hidden rounded-b-[32px] px-5 pt-5 pb-[92px] text-white md:rounded-[32px] md:px-8 md:pt-7 md:pb-[100px] lg:pb-8"
+          style={{ background: 'var(--app-top)' }}
+        >
           <div aria-hidden="true" className="pointer-events-none absolute -top-24 -left-16 h-64 w-64 rounded-full bg-accent opacity-25 blur-[80px]" />
           <div className="relative flex items-center justify-between gap-3">
             <Link href="/cuenta" className="flex min-w-0 items-center gap-3" aria-label="Mi cuenta">
