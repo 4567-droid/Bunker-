@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { BottomNav, Chip, ErrorNote, Field, GhostButton, Kicker, LoginShell, OkNote, PrimaryButton, type NavTab } from '@/components/ui';
+import { BottomNav, Chip, ErrorNote, Field, GhostButton, Icon, Kicker, LoginShell, OkNote, PrimaryButton, type NavTab } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { money } from '@/lib/format';
+import { prizeInfo } from '@/lib/rules';
 import { addDays, DAY_LONG, DAY_SHORT, dow, type Hours } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 import { BlockForm, BlocksList, PasswordForm, PhotoPicker, TimeField, type Block } from './shared';
@@ -268,6 +269,14 @@ function MoneyList({ rows, onDelete }: { rows: MoneyRow[]; onDelete?: (r: MoneyR
 function Resumen({ f, go }: { f: Finance; go: (t: string) => void }) {
   return (
     <>
+      <button
+        type="button"
+        onClick={() => go('clientes')}
+        className="flex min-h-[54px] items-center gap-3 rounded-[14px] border border-line bg-field px-[18px] text-left text-base text-dim"
+      >
+        <Icon name="search" size={20} />
+        Buscar cliente por nombre o teléfono
+      </button>
       <div className="grid grid-cols-2 gap-2.5">
         <button type="button" onClick={() => go('agenda')} className="flex min-h-[52px] items-center justify-center rounded-full border border-line-2 bg-card text-[15px] font-medium text-ink">
           Turnos de hoy
@@ -755,6 +764,9 @@ interface Settings {
     bookingDays: number;
     cancelLimitMin: number;
     loyaltyGoal: number;
+    loyaltyReward: 'free' | 'discount' | 'gift';
+    loyaltyRewardPct: number;
+    loyaltyRewardText: string;
     doubleStampDays: number;
     referralPercent: number;
     monthlyGoal: number;
@@ -880,12 +892,52 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
           <Small label="Turnos cada (min)" type="number" value={String(biz.slotStep)} onChange={(v) => set({ slotStep: Number(v) })} />
           <Small label="Días para reservar" type="number" value={String(biz.bookingDays)} onChange={(v) => set({ bookingDays: Number(v) })} />
           <Small label="Cancelar hasta (min antes)" type="number" value={String(biz.cancelLimitMin)} onChange={(v) => set({ cancelLimitMin: Number(v) })} />
-          <Small label="Sellos de la tarjeta" type="number" value={String(biz.loyaltyGoal)} onChange={(v) => set({ loyaltyGoal: Number(v) })} />
-          <Small label="Doble sello (días)" type="number" value={String(biz.doubleStampDays)} onChange={(v) => set({ doubleStampDays: Number(v) })} />
           <Small label="Descuento invitación (%)" type="number" value={String(biz.referralPercent)} onChange={(v) => set({ referralPercent: Number(v) })} />
         </div>
       </Section>
-      <PrimaryButton onClick={() => save('/api/owner/business', biz, 'Datos, horarios y reglas guardados.')}>Guardar datos, horarios y reglas</PrimaryButton>
+
+      <Section title="Tarjeta de fidelidad">
+        <span className="text-[13px] font-light text-muted">Qué se lleva el cliente al completar la tarjeta y cuántos cortes necesita.</span>
+        <span className="px-1 text-[13px] font-light text-muted">Premio</span>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ['free', 'Corte gratis'],
+              ['discount', 'Descuento'],
+              ['gift', 'Regalo'],
+            ] as const
+          ).map(([k, label]) => (
+            <Chip key={k} size="sm" on={biz.loyaltyReward === k} onClick={() => set({ loyaltyReward: k })}>
+              {label}
+            </Chip>
+          ))}
+        </div>
+        {biz.loyaltyReward === 'discount' && (
+          <Small label="Descuento del premio (%)" type="number" value={String(biz.loyaltyRewardPct)} onChange={(v) => set({ loyaltyRewardPct: Number(v) })} />
+        )}
+        {biz.loyaltyReward === 'gift' && (
+          <Small label="¿Qué se lleva?" value={biz.loyaltyRewardText ?? ''} onChange={(v) => set({ loyaltyRewardText: v })} placeholder="Ej: una cera mate" />
+        )}
+        <div className="grid grid-cols-2 gap-2.5">
+          <Small label="Cortes para el premio" type="number" value={String(biz.loyaltyGoal)} onChange={(v) => set({ loyaltyGoal: Number(v) })} />
+          <Small label="Doble sello (días, 0 = no)" type="number" value={String(biz.doubleStampDays)} onChange={(v) => set({ doubleStampDays: Number(v) })} />
+        </div>
+        <span className="rounded-[14px] bg-field px-4 py-3 text-sm">
+          Así lo ven los clientes:{' '}
+          <span className="font-medium text-accent">
+            {
+              prizeInfo({
+                kind: biz.loyaltyReward,
+                pct: biz.loyaltyRewardPct,
+                text: biz.loyaltyRewardText || null,
+                goal: Math.max(2, Number(biz.loyaltyGoal) || 2),
+              }).title
+            }
+          </span>
+          . Se sellan {Math.max(1, (Number(biz.loyaltyGoal) || 2) - 1)} cortes y el siguiente tiene el premio.
+        </span>
+      </Section>
+      <PrimaryButton onClick={() => save('/api/owner/business', biz, 'Datos, horarios, reglas y tarjeta guardados.')}>Guardar datos, horarios, reglas y tarjeta</PrimaryButton>
 
       <Section title="Foto de portada">
         <span className="text-[13px] font-light text-muted">Se ve de fondo en el inicio de la web. Mejor una foto del local, horizontal y oscura.</span>
@@ -1278,7 +1330,8 @@ function ClientsList() {
   const fmt = (d: string | null) => (d ? `${Number(d.slice(8))}/${Number(d.slice(5, 7))}` : '—');
   return (
     <div className="flex flex-col gap-2.5">
-      <Field id="oq" label="Buscar" placeholder="Buscar por nombre, teléfono o correo" value={q} onChange={setQ} />
+      <Field id="oq" label="Buscar" type="search" placeholder="Buscar por nombre, teléfono o correo" value={q} onChange={setQ} autoFocus />
+      {q.trim() && <span className="px-1 text-[13px] font-light text-muted">Sin importar tildes ni cómo esté escrito el teléfono (con 0, 15 o +54 9).</span>}
       <div className="flex items-center justify-between px-1">
         <span className="text-sm text-muted">{data ? `${data.total}${data.total === 500 ? '+' : ''} clientes` : 'Cargando…'}</span>
         <a href={`/api/owner/clients?format=csv&q=${encodeURIComponent(q)}`} className="text-sm text-accent underline">

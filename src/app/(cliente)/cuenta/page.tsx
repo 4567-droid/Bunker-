@@ -7,6 +7,7 @@ import { AuthFields, authProblem, EMPTY_AUTH, submitAuth, type AuthMode, type Au
 import { Card, Dot, ErrorNote, Field, GhostButton, GREEN, Kicker, OkNote, PrimaryButton, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { areaFromWhatsapp, money, PAYMENTS } from '@/lib/format';
+import { prizeInfo } from '@/lib/rules';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 
 function NextAppt({ a, onChange }: { a: Appt; onChange: () => Promise<void> }) {
@@ -201,7 +202,9 @@ export default function Cuenta() {
         <span className="flex flex-col">
           <span className="text-base font-medium">Tarjeta de fidelidad</span>
           <span className="text-sm font-light text-muted">
-            {c.nextFree ? 'Tu próximo corte es gratis' : `Código para invitar: ${c.referralCode}`}
+            {c.nextFree
+              ? prizeInfo({ kind: config.business.loyaltyReward, pct: config.business.loyaltyRewardPct, text: config.business.loyaltyRewardText, goal: config.business.loyaltyGoal }).next
+              : `Código para invitar: ${c.referralCode}`}
           </span>
         </span>
         <span className="text-xl font-semibold text-accent">
@@ -224,7 +227,7 @@ export default function Cuenta() {
                 {h.status === 'no_show' ? (
                   <span className="text-dim">No fuiste</span>
                 ) : h.free ? (
-                  <span className="text-accent">Gratis</span>
+                  <span className="text-accent">{h.discountPct >= 100 ? 'Gratis' : h.discountPct > 0 ? `Premio ${h.discountPct}%` : 'Premio'}</span>
                 ) : h.stampsAdded ? (
                   <span className="text-accent">+{h.stampsAdded} {h.stampsAdded === 1 ? 'sello' : 'sellos'}</span>
                 ) : (

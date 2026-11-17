@@ -18,11 +18,12 @@ import {
   startCut,
   type ApptRow,
 } from '@/lib/booking';
-import { currentBusiness, type Business } from '@/lib/business';
+import { bizPrize, currentBusiness, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
 import { areaFromWhatsapp, firstName, normalizePhone, phoneDisplay } from '@/lib/format';
 import { fail, int, json, notFound, readBody, route, str, uuid } from '@/lib/http';
-import { nextIsFree } from '@/lib/rules';
+import { nextIsFree, prizeInfo } from '@/lib/rules';
+import { clientMatch, maskedPhone } from '@/lib/client-search';
 import { requireStaff, type ClientRow, type StaffRow } from '@/lib/session';
 import { newReferralCode } from '@/lib/clients';
 import { addDays, daysBetween, fmtMin, isDay, type Now } from '@/lib/time';
@@ -81,6 +82,7 @@ async function agenda(tx: Tx, biz: Business, st: StaffRow, day: string, now: Now
     today: now.day,
     now: fmtMin(now.min),
     goal: biz.loyalty_goal,
+    prize: { cell: prizeInfo(bizPrize(biz)).cell, note: prizeInfo(bizPrize(biz)).barber },
     barber: { id: st.id, name: st.name },
     status: {
       state: (status?.state ?? 'free') as 'free' | 'busy' | 'cutting',
@@ -161,19 +163,35 @@ export const GET = route(async (req, [action]) => {
       );
     }
     case 'clients': {
-      const rows = await tenantTx(biz.id, (tx) => tx<(ClientRow & { last_day: string | null })[]>`
-        select c.*, max(a.day) as last_day from clients c
-        join appointments a on a.client_id = c.id and a.barber_id = ${st.id}
-        where c.business_id = ${biz.id}
-        group by c.id order by max(a.day) desc nulls last, c.name limit 300`);
+      // Sin búsqueda: sus clientes. Con búsqueda (nombre o teléfono): todos los del local, pero el
+      // teléfono y el correo completos solo de los que atendió él (son datos personales)
+      const query = (q.get('q') ?? '').trim().slice(0, 60);
+      type Row = ClientRow & { last_day: string | null; mine: boolean };
+      const rows = await tenantTx(biz.id, (tx) => {
+        const match = query ? clientMatch(tx, query) : null;
+        return match
+          ? tx<Row[]>`
+              select c.*, max(a.day) as last_day, coalesce(bool_or(a.barber_id = ${st.id}), false) as mine
+              from clients c left join appointments a on a.client_id = c.id and a.status <> 'cancelled'
+              where c.business_id = ${biz.id} and ${match}
+              group by c.id order by max(a.day) desc nulls last, c.name limit 60`
+          : tx<Row[]>`
+              select c.*, max(a.day) as last_day, true as mine from clients c
+              join appointments a on a.client_id = c.id and a.barber_id = ${st.id}
+              where c.business_id = ${biz.id}
+              group by c.id order by max(a.day) desc nulls last, c.name limit 300`;
+      });
       return json({
         goal: biz.loyalty_goal,
+        prize: prizeInfo(bizPrize(biz)).cell,
+        query,
         clients: rows.map((c) => ({
           id: c.id,
           name: c.name,
-          phone: c.phone,
-          phoneDisplay: phoneDisplay(c.phone),
-          email: c.email,
+          mine: c.mine,
+          phone: c.mine ? c.phone : null,
+          phoneDisplay: c.mine ? phoneDisplay(c.phone) : maskedPhone(phoneDisplay(c.phone)),
+          email: c.mine ? c.email : null,
           stamps: c.stamps,
           visits: c.visits,
           lastDay: c.last_day,

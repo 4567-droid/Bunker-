@@ -6,6 +6,7 @@ import { useApp } from '@/components/client/app-context';
 import { Avatar, Card, Dot, GREEN, Icon, Kicker, RED, Scissors } from '@/components/ui';
 import { instagramHandle, mapsHref, money, phoneDisplay } from '@/lib/format';
 import { enviarWhatsApp } from '@/lib/whatsapp';
+import { prizeInfo } from '@/lib/rules';
 import { addDays, dayLabel, hoursSummary } from '@/lib/time';
 
 function ChairArt() {
@@ -35,6 +36,7 @@ export default function Inicio() {
   const stamps = me?.client?.stamps ?? 0;
   const nextAppt = me?.upcoming?.[0] ?? null;
   const goal = biz.loyaltyGoal;
+  const prize = prizeInfo({ kind: biz.loyaltyReward, pct: biz.loyaltyRewardPct, text: biz.loyaltyRewardText, goal });
 
   const rows = [
     { label: service ? `${service.name} · ${money(service.price)}` : 'Seleccionar corte', step: 1 },
@@ -194,9 +196,9 @@ export default function Inicio() {
           <span className="text-sm font-light text-muted">
             {me?.client
               ? me.client.nextFree
-                ? 'Tu próximo corte es gratis'
+                ? prize.next
                 : `${stamps} de ${goal} sellos${doubleOn && doubleUntil ? ` · doble sello hasta el ${Number(doubleUntil.slice(8))}/${Number(doubleUntil.slice(5, 7))}` : ''}`
-              : `Sumá sellos: el ${goal}.º corte es gratis`}
+              : `Sumá sellos: ${prize.short}`}
           </span>
         </span>
         <span className="text-[22px] font-semibold text-accent">

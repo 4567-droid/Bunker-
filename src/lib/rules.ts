@@ -2,10 +2,59 @@
 import { daysBetween } from './time';
 
 // ---------------------------------------------------------------------
-// Fidelidad: tarjeta de 10 sellos, el 10.º corte es gratis.
+// Fidelidad: tarjeta de 10 sellos, el 10.º corte tiene el premio (gratis, descuento o regalo).
 // Doble sello: si vuelve dentro de los 30 días de su último corte, suma 2.
 // Los sellos van de 0 a 9; con 9 (tarjeta llena) el próximo corte es gratis.
 // ---------------------------------------------------------------------
+/** El premio de la tarjeta lo elige cada negocio: gratis, un % de descuento o un regalo */
+export type PrizeKind = 'free' | 'discount' | 'gift';
+export interface Prize {
+  kind: PrizeKind;
+  pct: number;
+  text: string | null;
+  goal: number;
+}
+
+/** Todos los textos del premio en un solo lugar (web, panel del barbero y precio del turno) */
+export function prizeInfo(p: Prize) {
+  const goal = p.goal;
+  const gift = (p.text ?? '').trim() || 'un regalo';
+  if (p.kind === 'discount') {
+    return {
+      pct: p.pct,
+      cell: `${p.pct}%`,
+      title: `El ${goal}.º corte tiene ${p.pct}% de descuento`,
+      short: `el ${goal}.º corte tiene ${p.pct}% de descuento`,
+      next: `Tu próximo corte tiene ${p.pct}% de descuento`,
+      reason: `${p.pct}% · tarjeta de fidelidad`,
+      barber: `Con este corte completa la tarjeta: tiene ${p.pct}% de descuento.`,
+      done: `Listo: tenía ${p.pct}% de descuento por la tarjeta. La tarjeta vuelve a empezar.`,
+    };
+  }
+  if (p.kind === 'gift') {
+    return {
+      pct: 0,
+      cell: 'Premio',
+      title: `En el ${goal}.º corte te llevás ${gift}`,
+      short: `en el ${goal}.º corte te llevás ${gift}`,
+      next: `En tu próximo corte te llevás ${gift}`,
+      reason: `Premio de la tarjeta: ${gift}`,
+      barber: `Con este corte completa la tarjeta: se lleva ${gift}.`,
+      done: `Listo: entregale ${gift}. La tarjeta vuelve a empezar.`,
+    };
+  }
+  return {
+    pct: 100,
+    cell: 'Gratis',
+    title: `El ${goal}.º corte es gratis`,
+    short: `el ${goal}.º corte es gratis`,
+    next: 'Tu próximo corte es gratis',
+    reason: 'Corte gratis · tarjeta de fidelidad',
+    barber: 'Con este corte completa la tarjeta: es gratis.',
+    done: 'Listo: era su corte gratis. La tarjeta vuelve a empezar.',
+  };
+}
+
 export interface StampOutcome {
   free: boolean;
   added: number;
