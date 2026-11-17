@@ -15,7 +15,7 @@ import {
 } from '@/lib/booking';
 import { currentBusiness, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
-import { firstName, isEmail, money, normalizePhone, phoneDisplay } from '@/lib/format';
+import { areaFromWhatsapp, firstName, isEmail, money, normalizePhone, phoneDisplay } from '@/lib/format';
 import { fail, json, notFound, readBody, route, str } from '@/lib/http';
 import { nextIsFree } from '@/lib/rules';
 import { currentClient, requireClient, type ClientRow } from '@/lib/session';
@@ -23,8 +23,8 @@ import { dayLabel, isOpenAt, zonedToUtc, type Now } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
-function readPhone(raw: string): string {
-  const phone = normalizePhone(raw);
+function readPhone(raw: string, biz: Business): string {
+  const phone = normalizePhone(raw, areaFromWhatsapp(biz.whatsapp));
   if (!phone) fail(400, 'Revisá el teléfono: código de área y número, sin 0 ni 15. Ej: 362 549-3647');
   return phone;
 }
@@ -193,7 +193,7 @@ export const POST = route(async (req, [action]) => {
       await guardAttempts([`reg:${ip}`], 15, 60);
       const name = str(body, 'name', { min: 3, max: 80, label: 'el nombre y apellido' }).replace(/\s+/g, ' ');
       if (!/\S+\s+\S+/.test(name)) fail(400, 'Escribí tu nombre y apellido.');
-      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }));
+      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }), biz);
       const email = str(body, 'email', { optional: true, max: 120 }).toLowerCase();
       if (email && !isEmail(email)) fail(400, 'Revisá el correo electrónico.');
       const ref = str(body, 'ref', { optional: true, max: 20 }).toUpperCase();
@@ -223,7 +223,7 @@ export const POST = route(async (req, [action]) => {
     }
 
     case 'login': {
-      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }));
+      const phone = readPhone(str(body, 'phone', { max: 30, label: 'el teléfono' }), biz);
       const email = str(body, 'email', { optional: true, max: 120 }).toLowerCase();
       const ip = await clientIp();
       const keys = [`cl:${ip}`, `cl:${biz.id}:${phone}`];

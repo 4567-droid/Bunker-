@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp, type Appt } from '@/components/client/app-context';
-import { AuthFields, authValid, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
+import { AuthFields, authProblem, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
 import { Avatar, Chip, Dot, ErrorNote, GhostButton, GREEN, Kicker, OptionRow, RED, SummaryRow, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
-import { money, PAYMENTS, type Payment } from '@/lib/format';
+import { areaFromWhatsapp, money, PAYMENTS, type Payment } from '@/lib/format';
 import { DAY_SHORT, dayLabel, dow } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 
@@ -94,7 +94,9 @@ export default function Turno() {
   const timeOk = !!slot;
   const barberOk = timeOk && !!barber && slot!.free.includes(barber.id);
   const payOk = !!draft.payment;
-  const formOk = registered || authValid(mode, form);
+  const area = areaFromWhatsapp(biz.whatsapp);
+  const formProblem = registered ? null : authProblem(mode, form, area);
+  const formOk = !formProblem;
   const can: Record<number, boolean> = {
     1: !!service,
     2: timeOk,
@@ -140,7 +142,7 @@ export default function Turno() {
     setError(null);
     try {
       if (!registered) {
-        const m = await submitAuth(mode, form, mode === 'register' ? referral?.code : null);
+        const m = await submitAuth(mode, form, mode === 'register' ? referral?.code : null, area);
         setMe(m);
         if (mode === 'register') clearReferral();
       }
@@ -276,6 +278,32 @@ export default function Turno() {
 
   // ------------------------------------------------------------- asistente
   const primaryOk = can[step];
+  /** Por qué no se puede seguir (se muestra al tocar el botón gris) */
+  function whyNot(): { text: string; goTo?: number } | null {
+    if (!service) return { text: 'Elegí un servicio.', goTo: 1 };
+    if (step === 1) return null;
+    if (!draft.day || !draft.time) return { text: 'Elegí el día y el horario.', goTo: 2 };
+    if (!slots) return { text: 'Estamos buscando los horarios libres, esperá un segundo.' };
+    if (!timeOk) return { text: `El horario de las ${draft.time} ya no está libre. Elegí otro.`, goTo: 2 };
+    if (step === 2) return null;
+    if (!barberOk) return { text: barber ? `${barber.name} ya no está libre a esa hora. Elegí otro barbero u otro horario.` : 'Elegí un barbero.', goTo: 3 };
+    if (step === 3) return null;
+    if (!payOk) return { text: 'Elegí cómo vas a pagar.', goTo: 4 };
+    if (step === 4) return null;
+    if (formProblem) return { text: formProblem };
+    return null;
+  }
+  function primary() {
+    if (busy) return;
+    if (!primaryOk) {
+      const w = whyNot();
+      setError(w?.text ?? 'Completá este paso para seguir.');
+      if (w?.goTo && w.goTo < step) setStep(w.goTo);
+      return;
+    }
+    if (step < 5) go(step + 1);
+    else reserve();
+  }
   return (
     <div className="flex flex-col gap-[18px] px-4 pt-7 pb-6">
       <div className="flex flex-col gap-2.5 px-1">
@@ -431,6 +459,7 @@ export default function Turno() {
                 values={form}
                 setValues={setForm}
                 idPrefix="t"
+                area={area}
                 title={mode === 'register' ? 'Tus datos, solo la primera vez' : 'Ingresá con tu teléfono'}
               />
             )}
@@ -451,8 +480,8 @@ export default function Turno() {
         </button>
         <button
           type="button"
-          onClick={() => (step < 5 ? go(step + 1) : reserve())}
-          disabled={!primaryOk || busy}
+          onClick={primary}
+          disabled={busy}
           className={`min-h-14 rounded-full border-0 text-[17px] font-semibold ${primaryOk && !busy ? 'bg-accent text-bg' : 'bg-line text-dim'}`}
         >
           {busy ? 'Reservando…' : step < 5 ? 'Siguiente →' : 'Reservar turno'}

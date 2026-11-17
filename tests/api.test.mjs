@@ -90,6 +90,17 @@ test('registro con y sin invitación', async () => {
   assert.equal(r.status, 409);
 });
 
+test('teléfono sin código de área: se completa con el del local (362)', async () => {
+  const x = agent();
+  let r = await x.post('/api/client/register', { name: 'Luis Local', phone: '15 488-8888' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.client.phone, '3624888888');
+  r = await agent().post('/api/client/login', { phone: '488 8888' });
+  assert.equal(r.status, 200, 'entra también con el número corto');
+  r = await agent().post('/api/client/register', { name: 'Otro Corto', phone: '12345' });
+  assert.equal(r.status, 400);
+});
+
 test('ingreso: si cargó correo, se pide el correo', async () => {
   let r = await carla.post('/api/client/register', { name: 'Carla Gómez', phone: '3624333333', email: 'Carla@Mail.com' });
   assert.equal(r.status, 201);

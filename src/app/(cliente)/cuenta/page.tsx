@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useApp, type Appt } from '@/components/client/app-context';
-import { AuthFields, authValid, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
+import { AuthFields, authProblem, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
 import { Card, Dot, ErrorNote, Field, GhostButton, GREEN, Kicker, OkNote, PrimaryButton, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
-import { money, PAYMENTS } from '@/lib/format';
+import { areaFromWhatsapp, money, PAYMENTS } from '@/lib/format';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 
 function NextAppt({ a, onChange }: { a: Appt; onChange: () => Promise<void> }) {
@@ -95,12 +95,18 @@ export default function Cuenta() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const c = me?.client ?? null;
+  const area = areaFromWhatsapp(config.business.whatsapp);
+  const problem = authProblem(mode, form, area);
 
   async function submit() {
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const m = await submitAuth(mode, form, mode === 'register' ? referral?.code : null);
+      const m = await submitAuth(mode, form, mode === 'register' ? referral?.code : null, area);
       setMe(m);
       if (mode === 'register') clearReferral();
       setForm(EMPTY_AUTH);
@@ -139,9 +145,9 @@ export default function Cuenta() {
             {referral.name} te invitó: tenés {referral.percent}% en tu primer corte.
           </span>
         )}
-        <AuthFields mode={mode} setMode={setMode} values={form} setValues={setForm} idPrefix="c" />
+        <AuthFields mode={mode} setMode={setMode} values={form} setValues={setForm} idPrefix="c" area={area} />
         <ErrorNote text={error} />
-        <PrimaryButton onClick={submit} disabled={!authValid(mode, form)} busy={busy}>
+        <PrimaryButton onClick={submit} busy={busy} className={problem ? '!bg-line !text-dim' : ''}>
           {mode === 'register' ? 'Crear cuenta' : 'Ingresar'}
         </PrimaryButton>
       </div>

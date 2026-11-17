@@ -2,7 +2,7 @@
 
 import { Field } from '@/components/ui';
 import { api } from '@/lib/api-client';
-import { isEmail, normalizePhone } from '@/lib/format';
+import { isEmail, normalizePhone, phoneDisplay } from '@/lib/format';
 import type { Me } from './app-context';
 
 export type AuthMode = 'register' | 'login';
@@ -13,24 +13,39 @@ export interface AuthValues {
 }
 export const EMPTY_AUTH: AuthValues = { name: '', phone: '', email: '' };
 
-export function authValid(mode: AuthMode, v: AuthValues): boolean {
-  const phoneOk = normalizePhone(v.phone) !== null;
-  const emailOk = !v.email.trim() || isEmail(v.email.trim());
-  if (mode === 'login') return phoneOk && emailOk;
-  return /\S+\s+\S+/.test(v.name.trim()) && phoneOk && emailOk;
-}
-
-export function authHint(mode: AuthMode, v: AuthValues): string | null {
-  if (mode === 'register' && v.name.trim() && !/\S+\s+\S+/.test(v.name.trim())) return 'Poné nombre y apellido.';
-  if (v.phone.replace(/\D/g, '').length >= 8 && !normalizePhone(v.phone)) return 'Teléfono: código de área y número, sin 0 ni 15. Ej: 362 549-3647';
-  if (v.email.trim() && !isEmail(v.email.trim())) return 'Revisá el correo.';
+/** Qué le falta al formulario, en palabras simples. null = está todo bien. */
+export function authProblem(mode: AuthMode, v: AuthValues, area?: string | null): string | null {
+  const name = v.name.trim();
+  if (mode === 'register') {
+    if (!name) return 'Escribí tu nombre y apellido.';
+    if (!/\S+\s+\S+/.test(name)) return 'Falta tu apellido: escribí nombre y apellido (ej: Juan Pérez).';
+  }
+  const digits = v.phone.replace(/\D/g, '');
+  if (!digits) return 'Escribí tu teléfono.';
+  if (!normalizePhone(v.phone, area)) {
+    return `Revisá el teléfono: ${digits.length} números. Escribilo con código de área (ej: 362 549-3647) o solo tu número (ej: 15 549-3647).`;
+  }
+  if (v.email.trim() && !isEmail(v.email.trim())) return 'Revisá el correo (ej: nombre@gmail.com) o dejalo vacío: es opcional.';
   return null;
 }
 
-export function submitAuth(mode: AuthMode, v: AuthValues, ref?: string | null): Promise<Me> {
+export function authValid(mode: AuthMode, v: AuthValues, area?: string | null): boolean {
+  return authProblem(mode, v, area) === null;
+}
+
+/** El teléfono completo como va a quedar (para mostrarlo debajo del campo) */
+export function phonePreview(v: AuthValues, area?: string | null): string | null {
+  const p = normalizePhone(v.phone, area);
+  if (!p) return null;
+  const typed = v.phone.replace(/\D/g, '');
+  return typed.length < 10 ? `Queda como ${phoneDisplay(p)}` : null;
+}
+
+export function submitAuth(mode: AuthMode, v: AuthValues, ref?: string | null, area?: string | null): Promise<Me> {
+  const phone = normalizePhone(v.phone, area) ?? v.phone;
   return mode === 'register'
-    ? api<Me>('/api/client/register', { name: v.name, phone: v.phone, email: v.email, ref: ref ?? undefined })
-    : api<Me>('/api/client/login', { phone: v.phone, email: v.email });
+    ? api<Me>('/api/client/register', { name: v.name, phone, email: v.email, ref: ref ?? undefined })
+    : api<Me>('/api/client/login', { phone, email: v.email });
 }
 
 export function AuthFields({
@@ -40,6 +55,7 @@ export function AuthFields({
   setValues,
   idPrefix,
   title,
+  area,
 }: {
   mode: AuthMode;
   setMode: (m: AuthMode) => void;
@@ -47,8 +63,9 @@ export function AuthFields({
   setValues: (v: AuthValues) => void;
   idPrefix: string;
   title?: string;
+  area?: string | null;
 }) {
-  const hint = authHint(mode, values);
+  const preview = phonePreview(values, area);
   return (
     <form className="flex flex-col gap-2.5" onSubmit={(e) => e.preventDefault()}>
       {title && <span className="px-1 text-[15px] font-medium">{title}</span>}
@@ -75,7 +92,7 @@ export function AuthFields({
         value={values.email}
         onChange={(email) => setValues({ ...values, email })}
       />
-      {hint && <span className="px-1 text-[13px] text-muted">{hint}</span>}
+      {preview && <span className="px-1 text-[13px] text-muted">{preview}</span>}
       <button
         type="button"
         onClick={() => setMode(mode === 'register' ? 'login' : 'register')}

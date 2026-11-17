@@ -20,7 +20,7 @@ import {
 } from '@/lib/booking';
 import { currentBusiness, type Business } from '@/lib/business';
 import { tenantTx, type Tx } from '@/lib/db';
-import { firstName, normalizePhone, phoneDisplay } from '@/lib/format';
+import { areaFromWhatsapp, firstName, normalizePhone, phoneDisplay } from '@/lib/format';
 import { fail, int, json, notFound, readBody, route, str, uuid } from '@/lib/http';
 import { nextIsFree } from '@/lib/rules';
 import { requireStaff, type ClientRow, type StaffRow } from '@/lib/session';
@@ -270,7 +270,7 @@ export const POST = route(async (req, path) => {
           await tx`update queue_entries set status = 'called', called_by = ${st.id}, called_at = now() where id = ${next.id}`;
         } else if (sub === 'add') {
           const name = str(body, 'name', { min: 2, max: 60, label: 'el nombre' });
-          const phone = body.phone ? normalizePhone(String(body.phone)) : null;
+          const phone = body.phone ? normalizePhone(String(body.phone), areaFromWhatsapp(biz.whatsapp)) : null;
           await tx`insert into queue_entries (business_id, name, phone) values (${biz.id}, ${name}, ${phone})`;
         } else if (sub === 'leave') {
           await tx`update queue_entries set status = 'left' where id = ${uuid(body.id)} and business_id = ${biz.id}`;
@@ -306,7 +306,7 @@ export const POST = route(async (req, path) => {
     case 'appointments': {
       const name = str(body, 'name', { min: 2, max: 80, label: 'el nombre del cliente' });
       const phoneRaw = str(body, 'phone', { optional: true, max: 30 });
-      const phone = phoneRaw ? normalizePhone(phoneRaw) : null;
+      const phone = phoneRaw ? normalizePhone(phoneRaw, areaFromWhatsapp(biz.whatsapp)) : null;
       if (phoneRaw && !phone) fail(400, 'Revisá el teléfono (código de área y número).');
       const appt = await tenantTx(biz.id, async (tx) => {
         const client = await findOrCreateClient(tx, biz, name, phone);
