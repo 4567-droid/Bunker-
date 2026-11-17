@@ -16,6 +16,7 @@ interface Biz {
   accent: string;
   logoUrl: string | null;
   heroUrl: string | null;
+  theme?: string;
   clients: number;
   owners: { id: string; name: string; username: string; active: boolean }[];
   staff: { id: string; name: string; active: boolean }[];
@@ -298,7 +299,7 @@ function DemoCard({ demo, save }: { demo: Biz | null; save: (p: string, body: Re
 }
 
 function BusinessDetail({ b, save }: { b: Biz; save: (p: string, body: Record<string, unknown>, ok: string) => Promise<boolean> }) {
-  const [form, setForm] = useState({ name: b.name, kind: b.kind, domain: b.domain ?? '', accent: b.accent, logoUrl: b.logoUrl ?? '', heroUrl: b.heroUrl ?? '', status: b.status });
+  const [form, setForm] = useState({ name: b.name, kind: b.kind, domain: b.domain ?? '', accent: b.accent, logoUrl: b.logoUrl ?? '', heroUrl: b.heroUrl ?? '', status: b.status, theme: b.theme ?? 'clasico' });
   const [owner, setOwner] = useState({ name: b.owners[0]?.name ?? '', username: b.owners[0]?.username ?? '', password: '' });
   const centralHref = b.domain ? `https://${b.domain}/central` : `/central?negocio=${b.slug}`;
   const webHref = b.domain ? `https://${b.domain}/` : `/?negocio=${b.slug}`;
@@ -346,6 +347,7 @@ function BusinessDetail({ b, save }: { b: Biz; save: (p: string, body: Record<st
           <Input label="Logo (URL)" value={form.logoUrl} onChange={(v) => setForm({ ...form, logoUrl: v })} />
         </div>
         <Input label="Foto de portada (URL de la foto del local)" value={form.heroUrl} onChange={(v) => setForm({ ...form, heroUrl: v })} />
+        <ThemePicker value={form.theme} accent={form.accent} onChange={(theme, accent) => setForm({ ...form, theme, accent })} />
         <div className="flex flex-wrap gap-2">
           {Object.entries(STATUS).map(([k, v]) => (
             <Chip key={k} size="sm" on={form.status === k} onClick={() => setForm({ ...form, status: k })}>
@@ -376,8 +378,44 @@ function BusinessDetail({ b, save }: { b: Biz; save: (p: string, body: Record<st
   );
 }
 
+// Estilos de la web que puede elegir cada negocio (con su color sugerido)
+const THEME_OPTIONS = [
+  { id: 'clasico', label: 'Clásico', desc: 'Negro y amarillo, como Bunker', color: '#F5C400' },
+  { id: 'natural', label: 'Natural', desc: 'Verde oscuro, dorado y letras con serifa', color: '#C9A66B' },
+];
+
+/** Elegir el estilo de la web. Si el color era el sugerido del estilo anterior, cambia al del nuevo. */
+function ThemePicker({ value, accent, onChange }: { value: string; accent: string; onChange: (theme: string, accent: string) => void }) {
+  const cur = THEME_OPTIONS.find((t) => t.id === value) ?? THEME_OPTIONS[0];
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[13px] text-muted">Estilo de la web</span>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {THEME_OPTIONS.map((t) => {
+          const on = t.id === cur.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onChange(t.id, accent.toUpperCase() === cur.color.toUpperCase() ? t.color : accent)}
+              className={`flex items-center gap-3 rounded-2xl border-[1.5px] px-4 py-3 text-left text-ink ${on ? 'border-accent bg-pick' : 'border-line bg-card'}`}
+            >
+              <span className="h-8 w-8 shrink-0 rounded-full border border-line-2" style={{ background: t.id === 'natural' ? `linear-gradient(135deg, #1C2819 55%, ${t.color} 55%)` : `linear-gradient(135deg, #1A1A18 55%, ${t.color} 55%)` }} />
+              <span className="flex flex-col">
+                <span className="text-[15px] font-medium">{t.label}</span>
+                <span className="text-xs font-light text-muted">{t.desc}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function NewBusiness({ save, onDone }: { save: (p: string, body: Record<string, unknown>, ok: string) => Promise<boolean>; onDone: () => void }) {
-  const [f, setF] = useState({ name: '', slug: '', kind: 'Barbería', domain: '', accent: '#F5C400', logoUrl: '', ownerName: '', ownerUser: '', ownerPassword: '' });
+  const [f, setF] = useState({ name: '', slug: '', kind: 'Barbería', domain: '', accent: '#F5C400', logoUrl: '', theme: 'clasico', ownerName: '', ownerUser: '', ownerPassword: '' });
   const slugify = (s: string) =>
     s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
   const ok = f.name.trim().length > 1 && f.slug.length > 1 && f.ownerUser.length > 2 && f.ownerPassword.length >= 8;
@@ -396,6 +434,7 @@ function NewBusiness({ save, onDone }: { save: (p: string, body: Record<string, 
         <Input label="Color (#hex)" value={f.accent} onChange={(v) => setF({ ...f, accent: v })} />
         <Input label="Logo (URL, opcional)" value={f.logoUrl} onChange={(v) => setF({ ...f, logoUrl: v })} />
       </div>
+      <ThemePicker value={f.theme} accent={f.accent} onChange={(theme, accent) => setF({ ...f, theme, accent })} />
       <span className="pt-1 text-[13px] text-muted">Dueño del negocio</span>
       <div className="flex flex-wrap gap-2.5">
         <Input label="Nombre" value={f.ownerName} onChange={(v) => setF({ ...f, ownerName: v })} />

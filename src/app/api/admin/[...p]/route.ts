@@ -1,5 +1,5 @@
 import { endSessionsFor, hashPassword, normUser } from '@/lib/auth';
-import { forgetBusinessCache } from '@/lib/business';
+import { forgetBusinessCache, THEMES, type Theme } from '@/lib/business';
 import { adminTx } from '@/lib/db';
 import { fail, json, notFound, readBody, route, str, uuid } from '@/lib/http';
 import { requireStaff } from '@/lib/session';
@@ -30,6 +30,11 @@ function cleanDomain(v: string): string | null {
   return d;
 }
 
+/** Estilo de la web: 'clasico' (como Bunker) o 'natural' (verde y dorado, con serifa) */
+function cleanTheme(v: unknown): Theme {
+  return THEMES.includes(v as Theme) ? (v as Theme) : 'clasico';
+}
+
 function cleanAccent(v: string): string {
   const a = v.trim() || '#F5C400';
   if (!/^#[0-9a-fA-F]{6}$/.test(a)) fail(400, 'El color tiene que ser tipo #F5C400.');
@@ -41,8 +46,8 @@ export const GET = route(async (_req, [action]) => {
   if (action !== 'businesses') notFound();
   return json(
     await adminTx(async (tx) => {
-      const businesses = await tx<{ id: string; slug: string; name: string; kind: string; domain: string | null; status: string; accent: string; logo_url: string | null; hero_url: string | null }[]>`
-        select id, slug, name, kind, domain, status, accent, logo_url, hero_url from businesses order by created_at`;
+      const businesses = await tx<{ id: string; slug: string; name: string; kind: string; domain: string | null; status: string; accent: string; logo_url: string | null; hero_url: string | null; theme: string }[]>`
+        select id, slug, name, kind, domain, status, accent, logo_url, hero_url, theme from businesses order by created_at`;
       const staff = await tx<{ id: string; business_id: string; role: string; name: string; username: string; active: boolean }[]>`
         select id, business_id, role, name, username, active from staff where role <> 'admin' order by role desc, sort, name`;
       const counts = await tx<{ business_id: string; clients: number }[]>`
@@ -58,6 +63,7 @@ export const GET = route(async (_req, [action]) => {
           accent: b.accent,
           logoUrl: b.logo_url,
           heroUrl: b.hero_url,
+          theme: b.theme,
           clients: counts.find((c) => c.business_id === b.id)?.clients ?? 0,
           owners: staff.filter((s) => s.business_id === b.id && s.role === 'owner').map((s) => ({ id: s.id, name: s.name, username: s.username, active: s.active })),
           staff: staff.filter((s) => s.business_id === b.id && s.role === 'barber').map((s) => ({ id: s.id, name: s.name, active: s.active })),
@@ -86,12 +92,13 @@ export const POST = route(async (req, path) => {
     const hash = await hashPassword(ownerPassword);
     await adminTx(async (tx) => {
       const [b] = await tx<{ id: string }[]>`
-        insert into businesses (slug, name, kind, domain, status, accent, logo_url, hours)
+        insert into businesses (slug, name, kind, domain, status, accent, logo_url, hours, theme)
         values (${slug}, ${name}, ${str(body, 'kind', { optional: true, max: 40 }) || 'Barbería'},
                 ${cleanDomain(str(body, 'domain', { optional: true, max: 120 }))},
                 ${STATUSES.includes(String(body.status)) ? String(body.status) : 'por_armar'},
                 ${cleanAccent(str(body, 'accent', { optional: true, max: 7 }))},
-                ${str(body, 'logoUrl', { optional: true, max: 400 }) || null}, ${tx.json(DEFAULT_HOURS)})
+                ${str(body, 'logoUrl', { optional: true, max: 400 }) || null}, ${tx.json(DEFAULT_HOURS)},
+                ${cleanTheme(body.theme)})
         returning id`;
       await tx`insert into staff (business_id, role, name, username, password_hash)
                values (${b.id}, 'owner', ${str(body, 'ownerName', { optional: true, max: 60 }) || 'Dueño'}, ${ownerUser}, ${hash})`;
@@ -117,7 +124,8 @@ export const POST = route(async (req, path) => {
         status = ${STATUSES.includes(String(body.status)) ? String(body.status) : 'activo'},
         accent = ${cleanAccent(str(body, 'accent', { optional: true, max: 7 }))},
         logo_url = ${str(body, 'logoUrl', { optional: true, max: 400 }) || null},
-        hero_url = ${str(body, 'heroUrl', { optional: true, max: 400 }) || null}
+        hero_url = ${str(body, 'heroUrl', { optional: true, max: 400 }) || null},
+        theme = ${body.theme === undefined ? tx`theme` : cleanTheme(body.theme)}
       where id = ${id}`);
     if (!r.count) fail(404, 'Negocio no encontrado.');
     forgetBusinessCache();

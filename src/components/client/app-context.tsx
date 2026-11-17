@@ -244,6 +244,44 @@ export function ClientNav() {
   const path = usePathname();
   const { config } = useApp();
   const short = config.business.name.split(/\s+/)[0].toUpperCase();
+
+  // Estilo "natural": links a la izquierda, la marca en el medio y "Mi cuenta" + "Sacar turno" a la derecha
+  if (config.business.theme === 'natural') {
+    const [first, ...rest] = config.business.name.split(/\s+/);
+    const left = TABS.filter((t) => t.id === '/turno' || t.id === '/fidelidad' || t.id === '/productos');
+    const linkCls = (on: boolean) => `inline-flex min-h-10 items-center rounded-full px-3 text-sm whitespace-nowrap ${on ? 'font-semibold text-accent' : 'text-soft hover:text-ink'}`;
+    return (
+      <>
+        <header className="sticky top-0 z-30 order-first hidden border-b border-line/60 bg-hero/85 backdrop-blur md:block">
+          <div className="mx-auto grid h-[68px] max-w-[1080px] grid-cols-[1fr_auto_1fr] items-center px-10">
+            <nav aria-label="Menú" className="flex items-center gap-1">
+              {left.map((t) => (
+                <Link key={t.id} href={t.href ?? '/'} aria-current={t.id === path ? 'page' : undefined} className={linkCls(t.id === path)}>
+                  {t.label}
+                </Link>
+              ))}
+            </nav>
+            <Link href="/" aria-label="Inicio" className="flex flex-col items-center leading-none">
+              <span className="font-display text-[24px] font-semibold tracking-[.2em]">{first.toUpperCase()}</span>
+              {rest.length > 0 && <span className="mt-1 text-[9px] font-medium tracking-[.42em] text-muted uppercase">{rest.join(' ')}</span>}
+            </Link>
+            <div className="flex items-center justify-end gap-2">
+              <Link href="/cuenta" aria-current={path === '/cuenta' ? 'page' : undefined} className={linkCls(path === '/cuenta')}>
+                Mi cuenta
+              </Link>
+              {path !== '/turno' && (
+                <Link href="/turno" className="inline-flex min-h-10 items-center rounded-full bg-ink px-5 text-sm font-semibold whitespace-nowrap text-bg">
+                  Sacar turno
+                </Link>
+              )}
+            </div>
+          </div>
+        </header>
+        <BottomNav tabs={TABS} active={path} className="md:hidden" />
+      </>
+    );
+  }
+
   return (
     <>
       {/* PC: barra arriba con la marca, el menú y "Sacar turno" */}

@@ -767,6 +767,15 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   const cfgFilo = await agent({ 'x-bk-biz': 'filo' }).get('/api/public/config');
   assert.equal(cfgFilo.data.business.name, 'Filo Barbería');
   assert.deepEqual(cfgFilo.data.services.map((x) => x.name), ['Corte', 'Corte + barba', 'Barba sola']);
+  assert.equal(cfgFilo.data.business.theme, 'clasico', 'si no se elige, estilo clásico');
+  // El admin le cambia el estilo de la web
+  const filo = (await admin.get('/api/admin/businesses')).data.businesses.find((b) => b.slug === 'filo');
+  r = await admin.post('/api/admin/business/update', { id: filo.id, name: filo.name, theme: 'natural', accent: '#C9A66B' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const cfgFilo2 = await agent({ 'x-bk-biz': 'filo' }).get('/api/public/config');
+  assert.equal(cfgFilo2.data.business.theme, 'natural');
+  r = await admin.post('/api/admin/business/update', { id: filo.id, name: filo.name, theme: 'cualquiera' });
+  assert.equal((await agent({ 'x-bk-biz': 'filo' }).get('/api/public/config')).data.business.theme, 'clasico', 'un estilo que no existe vuelve a clásico');
 
   // Negocio de muestra: lo crea el admin, con su propia dirección, barberos, clientes y números
   r = await agent().post('/api/admin/demo', {});
@@ -778,8 +787,10 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   const cfg = await pubDemo.get('/api/public/config');
   const cfgBunker = await pub.get('/api/public/config');
   assert.equal(cfg.data.business.name, 'Navaja Barber Club');
-  // Es una copia de Bunker con otro nombre: mismo color, servicios, precios y tarjeta; 3 barberos
-  assert.equal(cfg.data.business.accent, cfgBunker.data.business.accent);
+  // Hace lo mismo que Bunker (servicios, precios y tarjeta; 3 barberos) con otro nombre y su propio estilo
+  assert.equal(cfg.data.business.theme, 'natural');
+  assert.equal(cfg.data.business.accent, '#C9A66B');
+  assert.equal(cfgBunker.data.business.theme, 'clasico', 'Bunker sigue con su estilo');
   assert.deepEqual(
     cfg.data.services.map((x) => [x.name, x.duration, x.price]),
     cfgBunker.data.services.map((x) => [x.name, x.duration, x.price]),

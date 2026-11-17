@@ -35,7 +35,12 @@ export interface Business {
   double_stamp_days: number;
   referral_percent: number;
   monthly_goal: number;
+  /** Estilo de la web: 'clasico' (como Bunker) o 'natural' (verde y dorado, con serifa) */
+  theme: Theme;
 }
+
+export type Theme = 'clasico' | 'natural';
+export const THEMES: Theme[] = ['clasico', 'natural'];
 
 export const BIZ_COOKIE = 'bk_biz';
 export const BIZ_HEADER = 'x-bk-biz';
@@ -112,6 +117,7 @@ export function publicBusiness(b: Business) {
     loyaltyReward: b.loyalty_reward ?? 'free',
     loyaltyRewardPct: b.loyalty_reward_pct ?? 50,
     loyaltyRewardText: b.loyalty_reward_text ?? null,
+    theme: (b.theme === 'natural' ? 'natural' : 'clasico') as Theme,
     doubleStampDays: b.double_stamp_days,
     referralPercent: b.referral_percent,
   };

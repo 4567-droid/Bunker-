@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from 'next';
-import { Jost } from 'next/font/google';
+import { Cormorant_Garamond, Jost } from 'next/font/google';
 import { headers } from 'next/headers';
 import type { CSSProperties, ReactNode } from 'react';
 import { currentBusiness } from '@/lib/business';
 import './globals.css';
 
 const jost = Jost({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700'], variable: '--font-jost', display: 'swap' });
+// Letras con serifa del estilo "natural" (títulos y marca)
+const serif = Cormorant_Garamond({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-serif', display: 'swap' });
 
 async function safeBusiness() {
   try {
@@ -57,7 +59,12 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const biz = await safeBusiness();
   return (
-    <html lang="es-AR" className={jost.variable} style={{ '--accent': biz?.accent ?? '#F5C400' } as CSSProperties}>
+    <html
+      lang="es-AR"
+      data-theme={biz?.theme === 'natural' ? 'natural' : 'clasico'}
+      className={`${jost.variable} ${serif.variable}`}
+      style={{ '--accent': biz?.accent ?? '#F5C400' } as CSSProperties}
+    >
       <body className="min-h-dvh bg-bg">{children}</body>
     </html>
   );
