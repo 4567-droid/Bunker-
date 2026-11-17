@@ -1,0 +1,177 @@
+-- Negocio de muestra ("Navaja Barber Club") para mostrarle el sistema a otras barberías.
+-- Es un negocio más, separado de Bunker por las mismas reglas de seguridad (RLS) que cualquier otro.
+--
+--   select demo_business();       crea la muestra si no existe (no toca nada si ya está)
+--   select demo_business(true);   la deja como nueva: borra sus datos y los vuelve a armar con fechas de hoy
+--                                 (conserva nombre, color, logo, foto, WhatsApp, Instagram y dirección web)
+--
+-- Accesos de la muestra (son públicos a propósito, para que cualquiera la pruebe):
+--   Central del dueño: usuario "demo", contraseña "demo1234"
+--   Barberos: "Lucas" con código 1111 y "Tomi" con código 2222
+-- (las contraseñas van cifradas igual que en la app: scrypt)
+
+create or replace function demo_business(p_reset boolean default false) returns uuid
+language plpgsql as $fn$
+declare
+  v_old       businesses%rowtype;
+  v_biz       uuid;
+  v_local     timestamp := now() at time zone 'America/Argentina/Buenos_Aires';
+  v_today     date;
+  v_nowmin    int;
+  v_barbers   uuid[] := '{}';
+  v_bnames    text[] := array['Lucas', 'Tomi'];
+  v_bhash     text[] := array['scrypt$16384$8$1$lrsdT9BwvhbfCioZIXddww==$Dx81+1tW1CIMV34F9ZFe4v70N4hNttOkt8spZACSzV4=', 'scrypt$16384$8$1$L/BIPIIO5gg9b5GCmFOZPg==$9Tmvm8JeO6ht7M0F4X7yl3raGRkmBGOAtfQmRPIms2U='];
+  v_svc       uuid[] := '{}';
+  v_sname     text[] := array['Corte', 'Corte + barba', 'Barba', 'Corte niño'];
+  v_sdur      int[]  := array[30, 50, 20, 30];
+  v_sprice    int[]  := array[14000, 17000, 9000, 11000];
+  v_pick      int[]  := array[1, 1, 1, 2, 2, 3, 4];
+  v_clients   uuid[] := '{}';
+  v_cname     text[] := '{}';
+  v_cphone    text[] := '{}';
+  v_first     text[] := array['Martín', 'Facundo', 'Julián', 'Lautaro', 'Santiago', 'Matías', 'Franco', 'Gonzalo', 'Nicolás', 'Bruno',
+                              'Ramiro', 'Emiliano', 'Thiago', 'Benjamín', 'Ignacio', 'Valentín', 'Lucio', 'Agustín', 'Mateo', 'Joaquín'];
+  v_last      text[] := array['Gómez', 'Fernández', 'López', 'Romero', 'Acosta', 'Benítez', 'Sosa', 'Ramírez', 'Medina', 'Aguirre',
+                              'Ojeda', 'Cabrera', 'Ríos', 'Vera', 'Duarte'];
+  v_pay       text[] := array['efectivo', 'efectivo', 'transferencia', 'mercadopago'];
+  v_slots     int[];
+  v_day       date;
+  v_slot      int;
+  v_h         int;
+  v_i         int;
+  v_j         int;
+  v_si        int;
+  v_ci        int;
+  v_status    text;
+  v_past      boolean;
+  v_id        uuid;
+  v_month     date;
+begin
+  v_today  := v_local::date;
+  v_nowmin := extract(hour from v_local)::int * 60 + extract(minute from v_local)::int;
+
+  select * into v_old from businesses where slug = 'demo';
+  if found then
+    if not p_reset then
+      return v_old.id;
+    end if;
+    delete from businesses where id = v_old.id;  -- se lleva todo lo de la muestra (y nada de otros negocios)
+  end if;
+
+  insert into businesses (id, slug, name, kind, domain, status, accent, logo_url, hero_url, whatsapp, instagram,
+                          address, city, maps_url, transfer_alias, hours, slot_step, booking_days, monthly_goal,
+                          loyalty_goal, loyalty_reward, loyalty_reward_pct, double_stamp_days, referral_percent)
+  values (coalesce(v_old.id, gen_random_uuid()), 'demo', coalesce(v_old.name, 'Navaja Barber Club'), 'Barbería',
+          case when v_old.id is null then 'turnos-navaja-demo.vercel.app' else v_old.domain end,
+          'demo', coalesce(v_old.accent, '#5BC0EB'), v_old.logo_url, v_old.hero_url, v_old.whatsapp, v_old.instagram,
+          coalesce(v_old.address, 'Av. Ejemplo 123'), coalesce(v_old.city, 'Resistencia, Chaco'), v_old.maps_url,
+          coalesce(v_old.transfer_alias, 'navaja.muestra'),
+          '{"0": [], "1": [["09:00", "13:00"], ["15:00", "20:00"]], "2": [["09:00", "13:00"], ["15:00", "20:00"]],
+            "3": [["09:00", "13:00"], ["15:00", "20:00"]], "4": [["09:00", "13:00"], ["15:00", "20:00"]],
+            "5": [["09:00", "13:00"], ["15:00", "20:00"]], "6": [["09:00", "14:00"]]}'::jsonb,
+          30, 14, 3500000, 8, 'free', 50, 30, 20)
+  returning id into v_biz;
+
+  -- Dueño y barberos
+  insert into staff (business_id, role, name, username, password_hash)
+  values (v_biz, 'owner', 'Dueño (muestra)', 'demo', 'scrypt$16384$8$1$FQgbqPLjW2FXWg577fhg0g==$CE+yFGoMCzc8yO+8dvHBjNcx4uV0Irgt4S4IlNqDSEk=');
+  for v_i in 1..2 loop
+    insert into staff (business_id, role, name, username, password_hash, sort)
+    values (v_biz, 'barber', v_bnames[v_i], lower(v_bnames[v_i]), v_bhash[v_i], v_i - 1)
+    returning id into v_id;
+    v_barbers := v_barbers || v_id;
+    insert into barber_status (barber_id, business_id, name, state) values (v_id, v_biz, v_bnames[v_i], 'free');
+  end loop;
+
+  -- Servicios y productos
+  for v_i in 1..4 loop
+    insert into services (business_id, name, duration_min, price, sort)
+    values (v_biz, v_sname[v_i], v_sdur[v_i], v_sprice[v_i], v_i - 1)
+    returning id into v_id;
+    v_svc := v_svc || v_id;
+  end loop;
+  insert into products (business_id, name, description, price, sort) values
+    (v_biz, 'Cera mate', 'Fijación fuerte sin brillo. Ideal para texturizados.', 8500, 0),
+    (v_biz, 'Pomada con brillo', 'Peinados clásicos y prolijos.', 9000, 1),
+    (v_biz, 'Aceite para barba', 'Hidrata y suaviza la barba.', 10500, 2);
+
+  -- 120 clientes de ejemplo. Los teléfonos empiezan con 362 0..., que no existen: nadie real recibe mensajes.
+  for v_i in 1..120 loop
+    insert into clients (business_id, name, phone, email, referral_code, source, created_at)
+    values (v_biz,
+            v_first[1 + (v_i - 1) % 20] || ' ' || v_last[1 + ((v_i - 1) / 20 + (v_i - 1) * 7) % 15],
+            '3620' || lpad(v_i::text, 6, '0'),
+            case when v_i % 3 = 0 then 'cliente' || v_i || '@example.com' end,
+            translate(upper(v_first[1 + (v_i - 1) % 20]), 'ÁÉÍÓÚÜÑ', 'AEIOUUN') || v_i,
+            case when v_i % 5 = 0 then 'barbero' else 'web' end,
+            now() - make_interval(days => 5 + (v_i * 37) % 110))
+    returning id into v_id;
+    v_clients := v_clients || v_id;
+  end loop;
+  select array_agg(c.name order by o.n), array_agg(c.phone order by o.n) into v_cname, v_cphone
+  from unnest(v_clients) with ordinality as o(id, n) join clients c on c.id = o.id;
+  -- Algunos llegaron invitados por otros
+  update clients set referred_by = v_clients[1 + (substring(referral_code from '\d+$')::int % 10)]
+  where business_id = v_biz and substring(referral_code from '\d+$')::int between 101 and 110;
+
+  -- Turnos: 4 meses de cortes terminados, los de hoy y los de los próximos 6 días
+  for v_h in -6..120 loop
+    v_day := v_today - v_h;
+    continue when extract(dow from v_day) = 0;  -- domingo cerrado
+    v_slots := case when extract(dow from v_day) = 6 then array[540, 600, 660, 720, 780]
+                    else array[540, 600, 660, 720, 900, 960, 1020, 1080, 1140] end;
+    for v_i in 1..2 loop
+      foreach v_slot in array v_slots loop
+        v_j := abs(hashtext(v_day::text || ':' || v_i || ':' || v_slot)) % 100;
+        v_past := v_day < v_today or (v_day = v_today and v_slot + 50 <= v_nowmin);
+        continue when v_j >= case when v_past then 62 when v_day = v_today then 45 else 32 end;
+        v_si := v_pick[1 + (v_j * 3 + v_slot / 60) % 7];
+        v_ci := 1 + abs(hashtext(v_slot::text || ':' || v_day::text || ':' || v_i)) % 120;
+        v_status := case when not v_past then 'booked' when v_j % 23 = 0 then 'no_show' else 'completed' end;
+        insert into appointments (business_id, client_id, client_name, client_phone, barber_id, service_id, service_name,
+                                  duration_min, day, start_min, end_min, status, source, payment, price, final_price,
+                                  stamps_added, confirmed_at, wa_sent_at, completed_at, created_at)
+        values (v_biz, v_clients[v_ci], v_cname[v_ci], v_cphone[v_ci], v_barbers[v_i], v_svc[v_si], v_sname[v_si],
+                v_sdur[v_si], v_day, v_slot, v_slot + v_sdur[v_si], v_status,
+                case when v_j % 6 = 0 then 'barbero' else 'web' end, v_pay[1 + v_j % 4],
+                v_sprice[v_si], v_sprice[v_si], case when v_status = 'completed' then 1 else 0 end,
+                case when v_status <> 'booked' or v_j % 2 = 0 then now() end, now(),
+                case when v_status = 'completed'
+                     then (v_day + make_interval(mins => v_slot + v_sdur[v_si])) at time zone 'America/Argentina/Buenos_Aires' end,
+                now() - make_interval(days => greatest(v_h, 0) + 2));
+      end loop;
+    end loop;
+  end loop;
+
+  -- Visitas y sellos de cada cliente según sus cortes
+  update clients c set visits = s.n, last_visit_on = s.last, stamps = s.n % 8
+  from (select client_id, count(*)::int as n, max(day) as last from appointments
+        where business_id = v_biz and status = 'completed' group by client_id) s
+  where c.id = s.client_id;
+
+  -- Ingresos y gastos de los últimos meses (para la Central y "Todos los meses")
+  for v_h in 0..4 loop
+    v_month := (date_trunc('month', v_today) - make_interval(months => v_h))::date;
+    insert into expenses (business_id, category, description, amount, on_date)
+    select v_biz, x.cat, x.det, x.amount, v_month + x.d
+    from (values ('Alquiler', 'Alquiler del local', 380000, 4),
+                 ('Servicios', 'Luz', 62000 + v_h * 4000, 9),
+                 ('Servicios', 'Agua e internet', 38000, 11),
+                 ('Insumos', 'Navajas, talco y toallas', 41000 + (v_h % 2) * 9000, 7),
+                 ('Productos', 'Ceras y pomadas para reventa', 95000, 14),
+                 ('Mantenimiento', 'Afilado de máquinas', 25000, 21)) as x(cat, det, amount, d)
+    where v_month + x.d <= v_today;
+    insert into incomes (business_id, category, description, amount, on_date)
+    select v_biz, x.cat, x.det, x.amount, v_month + x.d
+    from (values ('Productos', 'Venta de ceras y pomadas', 58000 + v_h * 6000, 17),
+                 ('Servicios extra', 'Diseño de barba y cejas', 24000, 23)) as x(cat, det, amount, d)
+    where v_month + x.d <= v_today;
+  end loop;
+
+  return v_biz;
+end
+$fn$;
+
+-- Solo la usan la app (rol bunker_app, desde el panel del administrador) y la publicación
+revoke all on function demo_business(boolean) from public;
+grant execute on function demo_business(boolean) to bunker_app;

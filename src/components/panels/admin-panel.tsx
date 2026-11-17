@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Chip, ErrorNote, Field, GhostButton, Kicker, LoginShell, OkNote, PrimaryButton, Stat } from '@/components/ui';
 import { api } from '@/lib/api-client';
+import { DEMO_ACCESS, DEMO_SLUG } from '@/lib/demo';
 import { PasswordForm } from './shared';
 
 interface Biz {
@@ -160,6 +161,8 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
 
       {creating && <NewBusiness save={save} onDone={() => setCreating(false)} />}
 
+      {data && <DemoCard demo={data.businesses.find((b) => b.slug === DEMO_SLUG) ?? null} save={save} />}
+
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:items-start">
         <section className="flex flex-col gap-2.5">
           <Kicker className="px-1">Negocios cargados</Kicker>
@@ -199,6 +202,97 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
         <PasswordForm />
       </div>
     </div>
+  );
+}
+
+/** Negocio de muestra: links para mostrar, accesos y "dejar como nuevo" */
+function DemoCard({ demo, save }: { demo: Biz | null; save: (p: string, body: Record<string, unknown>, ok: string) => Promise<boolean> }) {
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  async function run(reset: boolean) {
+    if (reset && !window.confirm('¿Dejar la muestra como nueva? Se borran los turnos y clientes que hayan cargado al probarla.')) return;
+    setBusy(true);
+    await save(
+      '/api/admin/demo',
+      { reset },
+      reset ? 'Listo: la muestra quedó como nueva, con turnos desde hoy.' : 'Listo: el negocio de muestra está creado.',
+    );
+    setBusy(false);
+  }
+  if (!demo) {
+    return (
+      <section className="flex flex-col gap-3 rounded-[20px] border border-dashed border-line-2 px-5 py-4">
+        <span className="text-lg font-semibold">Negocio de muestra</span>
+        <span className="text-sm font-light text-muted">
+          Una barbería de ejemplo, con clientes, turnos y 4 meses de números, para mostrarle el sistema a otros negocios.
+        </span>
+        <PrimaryButton onClick={() => run(false)} busy={busy} className="!min-h-12 self-start !px-6 !text-[15px]">
+          Crear negocio de muestra
+        </PrimaryButton>
+      </section>
+    );
+  }
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const base = demo.domain ? `https://${demo.domain}` : origin;
+  const q = demo.domain ? '' : `?negocio=${demo.slug}`;
+  const links = [
+    { label: 'Web de clientes', href: `${base}/${q}` },
+    { label: 'Central del dueño', href: `${base}/central${q}` },
+    { label: 'Panel de barberos', href: `${base}/barbero${q}` },
+  ];
+  return (
+    <section className="flex flex-col gap-3 rounded-[20px] border-[1.5px] px-5 py-4" style={{ borderColor: demo.accent }}>
+      <span className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="flex items-center gap-2.5 text-lg font-semibold">
+          <span className="h-3 w-3 rounded-full" style={{ background: demo.accent }} />
+          {demo.name} · muestra
+        </span>
+        <span className="text-sm font-light text-muted">{demo.clients} clientes de ejemplo</span>
+      </span>
+      <span className="text-sm font-light text-muted">
+        Para mostrarle el sistema a otros negocios. Es un negocio aparte: lo que hagan ahí no toca a Bunker.
+      </span>
+      <div className="flex flex-col gap-2">
+        {links.map((l) => (
+          <div key={l.label} className="flex items-center gap-3 rounded-[14px] bg-field px-4 py-2.5">
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-[13px] font-light text-muted">{l.label}</span>
+              <a href={l.href} target="_blank" rel="noopener noreferrer" className="truncate text-[15px] underline">
+                {l.href.replace(/^https?:\/\//, '')}
+              </a>
+            </span>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(l.href).then(() => setCopied(l.label)).catch(() => {})}
+              className="min-h-10 shrink-0 rounded-full border border-line-2 px-4 text-sm"
+            >
+              {copied === l.label ? 'Copiado' : 'Copiar'}
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2 rounded-[14px] border border-line px-4 py-3 text-sm sm:grid-cols-2">
+        <span>
+          <span className="font-light text-muted">Central: </span>
+          usuario <b>{DEMO_ACCESS.owner.user}</b> · contraseña <b>{DEMO_ACCESS.owner.password}</b>
+        </span>
+        <span>
+          <span className="font-light text-muted">Barberos: </span>
+          {DEMO_ACCESS.barbers.map((b, i) => (
+            <span key={b.name}>
+              {i > 0 ? ' · ' : ''}
+              <b>{b.name}</b> código <b>{b.code}</b>
+            </span>
+          ))}
+        </span>
+      </div>
+      <span className="text-[13px] font-light text-muted">
+        Consejo: en la Central de la muestra (Ajustes) cargá tu WhatsApp, así los interesados te escriben a vos.
+      </span>
+      <GhostButton onClick={() => run(true)} disabled={busy} className="!min-h-12 self-start !text-[15px]">
+        {busy ? 'Armando…' : 'Dejar la muestra como nueva'}
+      </GhostButton>
+    </section>
   );
 }
 

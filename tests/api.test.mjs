@@ -378,7 +378,7 @@ test('admin general y aislamiento entre negocios', async () => {
   const f = await sol.get('/api/owner/finance');
   assert.equal(f.data.income, 0, 'no ve plata de Bunker');
   const st = await sol.get('/api/owner/settings');
-  assert.equal(st.data.services.length, 0);
+  assert.deepEqual(st.data.services.map((x) => x.name), ['Turno'], 'arranca con un servicio para que la web ya funcione');
 
   r = await owner.get('/api/owner/finance', { 'x-bk-biz': 'unas-sol' });
   assert.equal(r.status, 403, 'el dueño de Bunker no entra a otro negocio');
@@ -758,6 +758,62 @@ test('buscar clientes por nombre o teléfono, se escriba como se escriba', async
   assert.match(elena.phoneDisplay, /•/);
   r = await mauri.get('/api/barber/clients');
   assert.ok(!r.data.clients.some((c) => c.name === 'Elena Nueva'), 'sin buscar, solo los suyos');
+});
+
+test('negocios nuevos completos y negocio de muestra separado de Bunker', async () => {
+  // Una barbería nueva desde el admin arranca con los tres servicios, lista para sacar turnos
+  let r = await admin.post('/api/admin/business', { name: 'Filo Barbería', slug: 'filo', kind: 'Barbería', ownerUser: 'filo', ownerPassword: 'filo-12345' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const cfgFilo = await agent({ 'x-bk-biz': 'filo' }).get('/api/public/config');
+  assert.equal(cfgFilo.data.business.name, 'Filo Barbería');
+  assert.deepEqual(cfgFilo.data.services.map((x) => x.name), ['Corte', 'Corte + barba', 'Barba sola']);
+
+  // Negocio de muestra: lo crea el admin, con su propia dirección, barberos, clientes y números
+  r = await agent().post('/api/admin/demo', {});
+  assert.equal(r.status, 401, 'solo el admin');
+  r = await admin.post('/api/admin/demo', {});
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const demoId = r.data.id;
+  const pubDemo = agent({ 'x-bk-biz': 'demo' });
+  const cfg = await pubDemo.get('/api/public/config');
+  assert.equal(cfg.data.business.name, 'Navaja Barber Club');
+  assert.equal(cfg.data.business.accent, '#5BC0EB');
+  assert.deepEqual(cfg.data.barbers.map((b) => b.name), ['Lucas', 'Tomi']);
+  assert.equal(cfg.data.services.length, 4);
+  const list = await admin.get('/api/admin/businesses');
+  const demo = list.data.businesses.find((b) => b.slug === 'demo');
+  assert.equal(demo.status, 'demo');
+  assert.equal(demo.domain, 'turnos-navaja-demo.vercel.app');
+  assert.equal(demo.clients, 120);
+
+  // Los accesos de la muestra funcionan y solo ven la muestra
+  const demoOwner = agent({ 'x-bk-biz': 'demo' });
+  r = await demoOwner.post('/api/staff/login', { role: 'owner', username: 'demo', password: 'demo1234' });
+  assert.equal(r.status, 200);
+  const months = await demoOwner.get('/api/owner/months');
+  assert.ok(months.data.months.length >= 4, 'tiene varios meses de números');
+  assert.ok(months.data.months.some((m) => m.income > 0 && m.expense > 0));
+  const cl = await demoOwner.get(`/api/owner/clients?q=${encodeURIComponent('Pérez')}`);
+  assert.equal(cl.data.total, 0, 'no ve clientes de Bunker');
+  const lucas = agent({ 'x-bk-biz': 'demo' });
+  assert.equal((await lucas.post('/api/staff/login', { role: 'barber', username: 'lucas', password: '1111' })).status, 200);
+  assert.equal((await lucas.get('/api/barber/agenda')).status, 200);
+  assert.equal((await agent().post('/api/staff/login', { role: 'owner', username: 'demo', password: 'demo1234' })).status, 401, 'en Bunker no existe');
+
+  // "Dejar como nueva": borra lo que cargaron al probar, conserva el negocio, y cierra las sesiones de la muestra
+  r = await demoOwner.post('/api/owner/expense', { category: 'Otros', description: 'Gasto de prueba', amount: 1234 });
+  assert.equal(r.status, 200);
+  const bunkerClientsBefore = (await owner.get('/api/owner/clients')).data.total;
+  r = await admin.post('/api/admin/demo', { reset: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.id, demoId, 'es el mismo negocio');
+  assert.equal((await demoOwner.get('/api/owner/finance')).status, 401, 'las sesiones de la muestra se cierran');
+  const again = agent({ 'x-bk-biz': 'demo' });
+  await again.post('/api/staff/login', { role: 'owner', username: 'demo', password: 'demo1234' });
+  const f = await again.get('/api/owner/finance');
+  assert.ok(!f.data.expenses.some((e) => e.description === 'Gasto de prueba'));
+  assert.equal((await owner.get('/api/owner/clients')).data.total, bunkerClientsBefore, 'Bunker no se toca');
+  assert.equal((await pub.get('/api/public/config')).data.business.name, 'Bunker Barber Club', 'la web principal sigue siendo Bunker');
 });
 
 test('seguridad: CSRF y freno a intentos', async () => {
