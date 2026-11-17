@@ -35,8 +35,41 @@ loadEnv();
 
 const onVercel = !!process.env.VERCEL;
 const cmd = process.argv[2];
+
+// Acepta la dirección en los dos formatos que muestra Supabase (URL o "host=... port=... password=...").
+// Copia de src/lib/db-url.ts: si cambiás algo acá, cambialo allá.
+function normalizeDbUrl(raw) {
+  const s = raw.trim().replace(/^["']|["']$/g, '');
+  if (/YOUR-PASSWORD/i.test(s)) {
+    throw new Error('DATABASE_URL todavía dice [YOUR-PASSWORD]: reemplazalo por la contraseña de la base (Supabase → Connect).');
+  }
+  if (/^postgres(ql)?:\/\//i.test(s)) return s;
+  const kv = {};
+  for (const m of s.matchAll(/([A-Za-z_]+)\s*[=:]\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g)) {
+    kv[m[1].toLowerCase()] = m[2] ?? m[3] ?? m[4] ?? '';
+  }
+  const host = kv.host ?? kv.hostname;
+  if (!host) {
+    throw new Error('DATABASE_URL no tiene el formato esperado: pegá la dirección que empieza con postgresql:// (Supabase → Connect → Transaction pooler).');
+  }
+  const user = kv.user ?? kv.username ?? 'postgres';
+  const pass = kv.password ?? kv.pass ?? '';
+  if (!pass) throw new Error('DATABASE_URL: falta la contraseña de la base.');
+  const port = kv.port ?? '5432';
+  const db = kv.database ?? kv.dbname ?? 'postgres';
+  const q = kv.sslmode ? `?sslmode=${encodeURIComponent(kv.sslmode)}` : '';
+  return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${db}${q}`;
+}
+
 // DIRECT_URL (opcional, para crear tablas), DATABASE_URL, o POSTGRES_URL (la integración de Vercel)
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const rawUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+let url = null;
+try {
+  url = rawUrl ? normalizeDbUrl(rawUrl) : null;
+} catch (e) {
+  console.error('Error:', e.message);
+  process.exit(1);
+}
 if (!url) {
   if (cmd === 'prepare') {
     console.warn('⚠ Todavía no hay una base de datos conectada: se compila igual, pero la web va a avisar que falta.');
