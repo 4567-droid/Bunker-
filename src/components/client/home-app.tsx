@@ -50,7 +50,7 @@ function Rings() {
 
 /** Tarjeta grande en degradé: próximo turno, la reserva empezada o "Reservá tu turno" */
 function HeroCard() {
-  const { nextAppt, service, barber, draft, config } = useHome();
+  const { nextAppt, service, barber, draft, config, multi, location } = useHome();
   const from = config.services.length ? Math.min(...config.services.map((s) => s.price)) : null;
 
   let kicker: string;
@@ -60,7 +60,7 @@ function HeroCard() {
   if (nextAppt) {
     kicker = nextAppt.status === 'in_progress' ? 'Te están atendiendo' : 'Tu próximo turno';
     title = `${nextAppt.dayLabel} · ${nextAppt.projectedTime ?? nextAppt.time}`;
-    sub = `${nextAppt.serviceName}${nextAppt.barberName ? ` con ${nextAppt.barberName}` : ''}${nextAppt.projectedTime ? ` · se corrió de las ${nextAppt.time}` : ''}`;
+    sub = `${nextAppt.serviceName}${nextAppt.barberName ? ` con ${nextAppt.barberName}` : ''}${nextAppt.locationName ? ` · ${nextAppt.locationName}` : ''}${nextAppt.projectedTime ? ` · se corrió de las ${nextAppt.time}` : ''}`;
     cta = { href: '/cuenta', label: 'Ver mi turno' };
   } else if (service) {
     kicker = 'Tu reserva';
@@ -69,7 +69,7 @@ function HeroCard() {
       draft.day && draft.time
         ? `${dayLabel(draft.day)} a las ${draft.time}${barber ? ` con ${barber.name}` : ''}`
         : 'Te falta elegir el día y el horario.';
-    cta = { href: `/turno?paso=${draft.day && draft.time ? (barber ? 4 : 3) : 2}`, label: 'Seguir reserva' };
+    cta = { href: `/turno?paso=${multi && !location ? 'lugar' : draft.day && draft.time ? (barber ? 'pago' : 'barbero') : 'hora'}`, label: 'Seguir reserva' };
   } else {
     kicker = 'Reservá tu turno';
     title = from != null ? `Turnos desde ${money(from)}` : 'Sacá tu turno online';
@@ -101,7 +101,7 @@ function HeroCard() {
 }
 
 export function HomeApp() {
-  const { biz, me, live, config, wa, maps, ig, waShown, where, hours, stamps, goal, prize, doubleOn, doubleUntil, photos } = useHome();
+  const { biz, me, live, config, wa, maps, ig, waShown, where, hours, stamps, goal, prize, doubleOn, doubleUntil, photos, multi, location, locations, locMaps } = useHome();
   const { setDraft } = useApp();
   const router = useRouter();
   const first = me?.client?.firstName;
@@ -267,7 +267,9 @@ export function HomeApp() {
                         )}
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span className="text-[16px] font-medium">{b.name}</span>
-                          <span className="text-[13px] font-light text-muted">Barbero</span>
+                          <span className="text-[13px] font-light text-muted">
+                            {multi ? (locations.find((l) => l.id === b.locationId)?.name ?? 'Barbero') : 'Barbero'}
+                          </span>
                         </span>
                         <span className={`inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium ${free ? 'bg-ok/12 text-ok' : 'bg-bad/10 text-bad'}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${free ? 'bg-ok' : 'bg-bad'}`} />
@@ -297,7 +299,7 @@ export function HomeApp() {
                     type="button"
                     onClick={() => {
                       setDraft({ serviceId: s.id, time: null, barberId: null });
-                      router.push('/turno?paso=2');
+                      router.push(multi && !location ? '/turno?paso=lugar' : '/turno?paso=hora');
                     }}
                     className="flex min-h-[64px] w-full items-center gap-3 px-2 py-2.5 text-left text-ink"
                   >
@@ -350,9 +352,9 @@ export function HomeApp() {
               <div className="flex flex-col gap-2.5">
                 <SectionHead title="Dónde estamos" />
                 <section className="flex flex-col divide-y divide-line rounded-[22px] bg-card px-2 py-1 shadow-[var(--app-shadow)]">
-                  {where && (
-                    <InfoRow icon="pin" title={where} sub={maps ? 'Cómo llegar' : undefined} href={maps ?? undefined} />
-                  )}
+                  {multi
+                    ? locations.map((l) => <InfoRow key={l.id} icon="pin" title={l.name} sub="Cómo llegar" href={locMaps(l) ?? undefined} />)
+                    : where && <InfoRow icon="pin" title={where} sub={maps ? 'Cómo llegar' : undefined} href={maps ?? undefined} />}
                   {hours.length > 0 && <InfoRow icon="estado" title="Horarios" lines={hours} />}
                   {ig && <InfoRow icon="instagram" title={`@${ig}`} sub="Instagram" href={`https://www.instagram.com/${ig}/`} />}
                   {wa && <InfoRow icon="whatsapp" title={waShown ?? 'WhatsApp'} sub="Escribinos por WhatsApp" href={wa} />}

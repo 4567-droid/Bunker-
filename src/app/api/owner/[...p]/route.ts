@@ -227,8 +227,10 @@ function parseHours(raw: unknown): Hours {
 
 async function settings(tx: Tx, biz: Business) {
   const [b] = await tx<Business[]>`select * from businesses where id = ${biz.id}`;
-  const barbers = await tx`select id, name, instagram, photo_url as "photoUrl", active, sort from staff
+  const barbers = await tx`select id, name, instagram, photo_url as "photoUrl", active, sort, location_id as "locationId" from staff
                            where business_id = ${biz.id} and role = 'barber' order by sort, name`;
+  const locations = await tx`select id, name, address, maps_url as "mapsUrl" from locations
+                             where business_id = ${biz.id} and active order by sort, name`;
   const services = await tx`select id, name, duration_min as duration, price, active, sort from services
                             where business_id = ${biz.id} order by sort, name`;
   const products = await tx`select id, name, description, price, image_url as "imageUrl", active, sort from products
@@ -258,9 +260,19 @@ async function settings(tx: Tx, biz: Business) {
       monthlyGoal: b.monthly_goal,
     },
     barbers,
+    locations,
     services,
     products,
   };
+}
+
+/** Sucursal elegida para un barbero: tiene que ser del negocio (vacío = sin sucursal: cuenta como la primera) */
+async function locationParam(tx: Tx, biz: Business, raw: unknown): Promise<string | null> {
+  if (raw === null || raw === '' || raw === undefined) return null;
+  const id = uuid(raw);
+  const [l] = await tx`select 1 from locations where id = ${id} and business_id = ${biz.id} and active`;
+  if (!l) fail(400, 'Esa sucursal no existe.');
+  return id;
 }
 
 interface ClientListRow {
@@ -507,9 +519,9 @@ export const POST = route(async (req, path) => {
         const code = str(body, 'code', { min: 4, max: 40, label: 'el código' });
         const [{ n }] = await tx<{ n: number }[]>`select count(*)::int as n from staff where business_id = ${biz.id} and role = 'barber'`;
         const [s] = await tx<{ id: string }[]>`
-          insert into staff (business_id, role, name, username, password_hash, instagram, sort)
+          insert into staff (business_id, role, name, username, password_hash, instagram, sort, location_id)
           values (${biz.id}, 'barber', ${name}, ${normUser(name)}, ${await hashPassword(code)},
-                  ${optText(body, 'instagram', 60)?.replace(/^@/, '') ?? null}, ${n})
+                  ${optText(body, 'instagram', 60)?.replace(/^@/, '') ?? null}, ${n}, ${await locationParam(tx, biz, body.locationId)})
           returning id`;
         await tx`insert into barber_status (barber_id, business_id, name) values (${s.id}, ${biz.id}, ${name})`;
         return { ok: true };
@@ -524,11 +536,44 @@ export const POST = route(async (req, path) => {
         const code = str(body, 'code', { optional: true, min: 4, max: 40, label: 'el código' });
         await tx`update staff set name = ${name}, username = ${normUser(name)},
                    instagram = ${body.instagram === undefined ? tx`instagram` : (optText(body, 'instagram', 60)?.replace(/^@/, '') ?? null)},
-                   active = ${active === undefined ? tx`active` : active}
+                   active = ${active === undefined ? tx`active` : active},
+                   location_id = ${body.locationId === undefined ? tx`location_id` : await locationParam(tx, biz, body.locationId)}
                  where id = ${id}`;
         if (code) await tx`update staff set password_hash = ${await hashPassword(code)} where id = ${id}`;
         await tx`update barber_status set name = ${name} where barber_id = ${id}`;
         return { ok: true, endSessions: !!code || active === false ? id : null };
+      }
+
+      // Sucursales: con dos o más, el cliente elige primero dónde va (cada barbero atiende en una)
+      case 'location':
+      case 'location/update': {
+        const name = str(body, 'name', { min: 2, max: 60, label: 'el nombre de la sucursal (ej: Ayacucho 184)' });
+        const address = optText(body, 'address', 160);
+        const maps = httpsLink(body, 'mapsUrl', 'Revisá el link de Google Maps (o dejalo vacío).');
+        if (key === 'location') {
+          const [{ n }] = await tx<{ n: number }[]>`select count(*)::int as n from locations where business_id = ${biz.id} and active`;
+          if (n >= 10) fail(400, 'Hasta 10 sucursales.');
+          await tx`insert into locations (business_id, name, address, maps_url, sort)
+                   values (${biz.id}, ${name}, ${address}, ${maps},
+                           (select coalesce(max(sort), 0) + 1 from locations where business_id = ${biz.id}))`;
+        } else {
+          const r = await tx`update locations set name = ${name}, address = ${address}, maps_url = ${maps}
+                             where id = ${uuid(body.id)} and business_id = ${biz.id}`;
+          if (!r.count) fail(404, 'Sucursal no encontrada.');
+        }
+        return { ok: true };
+      }
+      case 'location/delete': {
+        const id = uuid(body.id);
+        const [future] = await tx<{ n: number }[]>`
+          select count(*)::int as n from appointments
+          where location_id = ${id} and business_id = ${biz.id} and status in ('booked', 'in_progress') and day >= ${now.day}`;
+        if (future?.n) fail(409, `Esa sucursal tiene ${future.n} turno${future.n === 1 ? '' : 's'} reservado${future.n === 1 ? '' : 's'}. Cancelalos o esperá a que pasen.`);
+        // La sucursal se desactiva (los turnos viejos la siguen nombrando); sus barberos pasan a la primera hasta que les elijas otra
+        await tx`update staff set location_id = null where location_id = ${id} and business_id = ${biz.id}`;
+        const r = await tx`update locations set active = false where id = ${id} and business_id = ${biz.id}`;
+        if (!r.count) fail(404, 'Sucursal no encontrada.');
+        return { ok: true };
       }
 
       case 'service':

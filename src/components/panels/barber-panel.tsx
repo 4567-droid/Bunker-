@@ -67,7 +67,8 @@ interface Agenda {
   now: string;
   goal: number;
   prize?: { cell: string; note: string };
-  barber: { id: string; name: string };
+  /** location: su sucursal, si el negocio tiene varias */
+  barber: { id: string; name: string; location?: string | null };
   status: { state: 'free' | 'busy' | 'cutting'; freeInMin: number | null };
   counters: { total: number; confirmed: number; done: number; noShow: number };
   rows: Row[];
@@ -266,7 +267,10 @@ function BarberApp({ staff, brand, services, initialToday, onLogout }: { staff: 
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-xl font-semibold text-bg">{staff.name.charAt(0).toUpperCase()}</span>
           <span className="flex flex-col leading-tight">
             <span className="text-lg font-semibold">Hola, {staff.name}</span>
-            <span className="text-[13px] font-light text-muted">{dayLabel(today)}</span>
+            <span className="text-[13px] font-light text-muted">
+              {dayLabel(today)}
+              {agenda?.barber.location ? ` · ${agenda.barber.location}` : ''}
+            </span>
           </span>
         </span>
         <span className="inline-flex items-center gap-2 rounded-full border border-line px-3.5 py-2 text-[13px]">

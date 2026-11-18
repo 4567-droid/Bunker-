@@ -19,6 +19,8 @@ export interface Appt {
   serviceName: string;
   barberId: string;
   barberName: string | null;
+  /** Con varias sucursales, dónde es el turno */
+  locationName?: string | null;
   status: string;
   payment: Payment | null;
   price: number;
@@ -65,7 +67,7 @@ export interface Me {
   referrals?: { invited: number; rewarded: number };
   /** canUse: todavía puede cargar el código de un amigo (nunca se cortó y no usó otro) */
   invite?: { canUse: boolean; by: string | null; percent: number };
-  queue?: { id: string; status: string; position: number; waitMin: number } | null;
+  queue?: { id: string; status: string; position: number; waitMin: number; location?: string | null } | null;
   /** Aviso para mostrar después de entrar o de cargar un código */
   notice?: string | null;
 }
@@ -74,11 +76,15 @@ export interface Live {
   open: boolean;
   closesAt: string | null;
   nextOpening: { day: string; label: string; time: string } | null;
-  barbers: { id: string; name: string; state: 'free' | 'busy' | 'cutting'; freeInMin: number | null }[];
+  barbers: { id: string; name: string; state: 'free' | 'busy' | 'cutting'; freeInMin: number | null; locationId?: string | null }[];
   queue: { waiting: number; waitMin: number; avgMin: number };
+  /** Con varias sucursales: la fila sin turno de cada una */
+  locations?: { id: string; name: string; waiting: number; waitMin: number }[];
 }
 
 export interface Draft {
+  /** Sucursal (solo si el negocio tiene dos o más) */
+  locationId: string | null;
   serviceId: string | null;
   day: string | null;
   time: string | null;
@@ -87,7 +93,7 @@ export interface Draft {
   productIds: string[];
 }
 
-const EMPTY: Draft = { serviceId: null, day: null, time: null, barberId: null, payment: null, productIds: [] };
+const EMPTY: Draft = { locationId: null, serviceId: null, day: null, time: null, barberId: null, payment: null, productIds: [] };
 
 interface Ctx {
   config: PublicConfig;
@@ -138,9 +144,13 @@ export function ClientApp({ config, children }: { config: PublicConfig; children
     });
   }, []);
 
+  // Después de reservar se borra lo elegido, menos la sucursal (la próxima vez suele ser la misma)
   const resetDraft = useCallback(() => {
-    storage('session').set('bk_draft', null);
-    setDraftState(EMPTY);
+    setDraftState((d) => {
+      const next = { ...EMPTY, locationId: d.locationId };
+      storage('session').set('bk_draft', next.locationId ? JSON.stringify(next) : null);
+      return next;
+    });
   }, []);
 
   const refreshMe = useCallback(async () => {

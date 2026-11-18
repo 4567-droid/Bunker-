@@ -23,7 +23,7 @@ export const GET = route(async (req, [action]) => {
       return json(
         await tenantTx(biz.id, async (tx) => {
           const service = await getService(tx, biz.id, q.get('service'));
-          return { today: now.day, days: await listDays(tx, biz, service, now) };
+          return { today: now.day, days: await listDays(tx, biz, service, now, q.get('location')) };
         }),
       );
 
@@ -31,7 +31,7 @@ export const GET = route(async (req, [action]) => {
       return json(
         await tenantTx(biz.id, async (tx) => {
           const service = await getService(tx, biz.id, q.get('service'));
-          return { day: q.get('day'), slots: await listSlots(tx, biz, service, q.get('day') ?? '', now) };
+          return { day: q.get('day'), slots: await listSlots(tx, biz, service, q.get('day') ?? '', now, { locationId: q.get('location') }) };
         }),
       );
 

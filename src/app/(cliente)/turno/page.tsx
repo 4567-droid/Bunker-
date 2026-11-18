@@ -4,13 +4,26 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp, type Appt } from '@/components/client/app-context';
 import { AuthFields, authProblem, cleanCode, EMPTY_AUTH, submitAuth, type AuthMode, type AuthValues } from '@/components/client/auth-fields';
-import { Avatar, Chip, Dot, ErrorNote, GhostButton, GREEN, Kicker, OptionRow, RED, SummaryRow, WaLink } from '@/components/ui';
+import { Avatar, Chip, Dot, ErrorNote, GhostButton, GREEN, Icon, Kicker, OptionRow, RED, SummaryRow, WaLink } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { areaFromWhatsapp, money, PAYMENTS, type Payment } from '@/lib/format';
 import { DAY_SHORT, dayLabel, dow } from '@/lib/time';
 import { enviarWhatsApp } from '@/lib/whatsapp';
 
-const TITLES = ['', 'Elegí el servicio', 'Elegí día y hora', 'Elegí barbero', '¿Cómo pagás?', 'Revisá y reservá'];
+// Los pasos. Con dos o más sucursales, el primero es elegir dónde: así los horarios y barberos son los de ese local.
+type Kind = 'lugar' | 'servicio' | 'hora' | 'barbero' | 'pago' | 'resumen';
+const BASE: Kind[] = ['servicio', 'hora', 'barbero', 'pago', 'resumen'];
+const WITH_PLACE: Kind[] = ['lugar', ...BASE];
+const TITLES: Record<Kind, string> = {
+  lugar: '¿A qué sucursal vas?',
+  servicio: 'Elegí el servicio',
+  hora: 'Elegí día y hora',
+  barbero: 'Elegí barbero',
+  pago: '¿Cómo pagás?',
+  resumen: 'Revisá y reservá',
+};
+/** "Mateo, Joaco y Bruno" */
+const joinNames = (n: string[]) => (n.length > 1 ? `${n.slice(0, -1).join(', ')} y ${n[n.length - 1]}` : (n[0] ?? ''));
 
 interface Slot {
   time: string;
@@ -45,18 +58,31 @@ export default function Turno() {
   const service = config.services.find((s) => s.id === draft.serviceId) ?? null;
   const registered = !!me?.client;
   const upcoming = (me?.upcoming ?? []).filter((a) => a.status === 'booked');
+  // Sucursales
+  const locations = config.locations;
+  const multi = locations.length > 1;
+  const KINDS = multi ? WITH_PLACE : BASE;
+  const total = KINDS.length;
+  const kind = KINDS[Math.min(step, total) - 1];
+  const idx = (k: Kind) => KINDS.indexOf(k) + 1;
+  const location = multi ? (locations.find((l) => l.id === draft.locationId) ?? null) : null;
+  const locOk = !multi || !!location;
+  const locQ = location ? `&location=${location.id}` : '';
+  const here = location ? config.barbers.filter((b) => b.locationId === location.id) : config.barbers;
 
-  // ?paso=N desde la portada
+  // ?paso=hora (o el número de siempre: 1 servicio, 2 día y hora, 3 barbero) desde la portada
   useEffect(() => {
-    const p = Number(new URLSearchParams(window.location.search).get('paso'));
-    if (p >= 1 && p <= 5) setStep(p);
+    const raw = new URLSearchParams(window.location.search).get('paso') ?? '';
+    const k = (KINDS as string[]).includes(raw) ? (raw as Kind) : BASE[Number(raw) - 1];
+    if (k) setStep(KINDS.indexOf(k) + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!service) return;
+    if (!service || !locOk) return;
     let off = false;
     setDays(null);
-    api<{ days: { day: string; available: boolean; closed: string | null }[] }>(`/api/public/days?service=${service.id}`)
+    api<{ days: { day: string; available: boolean; closed: string | null }[] }>(`/api/public/days?service=${service.id}${locQ}`)
       .then((r) => {
         if (off) return;
         setDays(r.days);
@@ -69,22 +95,23 @@ export default function Turno() {
       off = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [service?.id]);
+  }, [service?.id, location?.id]);
 
   useEffect(() => {
-    if (!service || !draft.day) {
+    if (!service || !draft.day || !locOk) {
       setSlots(null);
       return;
     }
     let off = false;
     setSlots(null);
-    api<{ slots: Slot[] }>(`/api/public/slots?service=${service.id}&day=${draft.day}`)
+    api<{ slots: Slot[] }>(`/api/public/slots?service=${service.id}&day=${draft.day}${locQ}`)
       .then((r) => !off && setSlots(r.slots))
       .catch(() => !off && setSlots([]));
     return () => {
       off = true;
     };
-  }, [service, draft.day, slotsKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [service, draft.day, slotsKey, location?.id]);
 
   useEffect(() => {
     if (!service) return;
@@ -99,12 +126,13 @@ export default function Turno() {
   const area = areaFromWhatsapp(biz.whatsapp);
   const formProblem = registered ? null : authProblem(mode, form, area);
   const formOk = !formProblem;
-  const can: Record<number, boolean> = {
-    1: !!service,
-    2: timeOk,
-    3: barberOk,
-    4: payOk,
-    5: !!service && timeOk && barberOk && payOk && formOk,
+  const can: Record<Kind, boolean> = {
+    lugar: locOk,
+    servicio: locOk && !!service,
+    hora: locOk && timeOk,
+    barbero: locOk && barberOk,
+    pago: payOk,
+    resumen: locOk && !!service && timeOk && barberOk && payOk && formOk,
   };
 
   const products = config.products.filter((p) => draft.productIds.includes(p.id));
@@ -150,6 +178,7 @@ export default function Turno() {
         if (mode === 'register') clearReferral();
       }
       const r = await api<{ appointment: Appt }>('/api/client/book', {
+        locationId: location?.id,
         serviceId: service.id,
         day: draft.day,
         time: draft.time,
@@ -183,7 +212,7 @@ export default function Turno() {
       setDraft({ serviceId: svc?.id ?? null, day: booked.day, time: null, barberId: null, payment: booked.payment });
       setBooked(null);
       refreshMe();
-      go(svc ? 2 : 1);
+      go(idx(svc ? 'hora' : 'servicio'));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -195,7 +224,7 @@ export default function Turno() {
     setError(null);
     try {
       if (me?.queue) await api('/api/client/queue', { action: 'leave' });
-      else await api('/api/client/queue', { action: 'join' });
+      else await api('/api/client/queue', { action: 'join', locationId: location?.id });
       await Promise.all([refreshMe(), refreshLive()]);
     } catch (e) {
       setError((e as Error).message);
@@ -208,7 +237,7 @@ export default function Turno() {
     const prodNames = booked.products.map((p) => p.name);
     const text =
       `Hola ${short}! Soy ${clientName}. Confirmo mi turno: ${booked.serviceName} con ${booked.barberName}, ` +
-      `${booked.dayLabel} a las ${booked.time}. Pago: ${payName(booked.payment)}` +
+      `${booked.dayLabel} a las ${booked.time}${booked.locationName ? `, en ${booked.locationName}` : ''}. Pago: ${payName(booked.payment)}` +
       (booked.payment === 'transferencia' && biz.transferAlias ? ` (alias ${biz.transferAlias}).` : '.') +
       (prodNames.length ? ` Quiero sumar: ${prodNames.join(', ')}.` : '');
     const wa = biz.whatsapp ? enviarWhatsApp({ to: biz.whatsapp, text }).url : null;
@@ -221,6 +250,12 @@ export default function Turno() {
             {booked.serviceName} con {booked.barberName}
             <br />
             {booked.dayLabel} · {booked.time} · {payName(booked.payment)}
+            {booked.locationName && (
+              <>
+                <br />
+                En {booked.locationName}
+              </>
+            )}
           </span>
           <span className="text-[15px] font-light text-muted">
             Total {money(booked.total)}
@@ -284,19 +319,21 @@ export default function Turno() {
   }
 
   // ------------------------------------------------------------- asistente
-  const primaryOk = can[step];
+  const primaryOk = can[kind];
   /** Por qué no se puede seguir (se muestra al tocar el botón gris) */
   function whyNot(): { text: string; goTo?: number } | null {
-    if (!service) return { text: 'Elegí un servicio.', goTo: 1 };
-    if (step === 1) return null;
-    if (!draft.day || !draft.time) return { text: 'Elegí el día y el horario.', goTo: 2 };
+    if (!locOk) return { text: 'Elegí la sucursal.', goTo: idx('lugar') };
+    if (kind === 'lugar') return null;
+    if (!service) return { text: 'Elegí un servicio.', goTo: idx('servicio') };
+    if (kind === 'servicio') return null;
+    if (!draft.day || !draft.time) return { text: 'Elegí el día y el horario.', goTo: idx('hora') };
     if (!slots) return { text: 'Estamos buscando los horarios libres, esperá un segundo.' };
-    if (!timeOk) return { text: `El horario de las ${draft.time} ya no está libre. Elegí otro.`, goTo: 2 };
-    if (step === 2) return null;
-    if (!barberOk) return { text: barber ? `${barber.name} ya no está libre a esa hora. Elegí otro barbero u otro horario.` : 'Elegí un barbero.', goTo: 3 };
-    if (step === 3) return null;
-    if (!payOk) return { text: 'Elegí cómo vas a pagar.', goTo: 4 };
-    if (step === 4) return null;
+    if (!timeOk) return { text: `El horario de las ${draft.time} ya no está libre. Elegí otro.`, goTo: idx('hora') };
+    if (kind === 'hora') return null;
+    if (!barberOk) return { text: barber ? `${barber.name} ya no está libre a esa hora. Elegí otro barbero u otro horario.` : 'Elegí un barbero.', goTo: idx('barbero') };
+    if (kind === 'barbero') return null;
+    if (!payOk) return { text: 'Elegí cómo vas a pagar.', goTo: idx('pago') };
+    if (kind === 'pago') return null;
     if (formProblem) return { text: formProblem };
     return null;
   }
@@ -308,16 +345,18 @@ export default function Turno() {
       if (w?.goTo && w.goTo < step) setStep(w.goTo);
       return;
     }
-    if (step < 5) go(step + 1);
+    if (step < total) go(step + 1);
     else reserve();
   }
   return (
     <div className="mx-auto flex w-full max-w-[480px] flex-col gap-[18px] px-4 pt-7 pb-6">
       <div className="flex flex-col gap-2.5 px-1">
-        <Kicker>Paso {step} de 5</Kicker>
-        <h1 className="m-0 text-[28px] font-semibold">{TITLES[step]}</h1>
-        <div className="grid grid-cols-5 gap-1.5">
-          {[1, 2, 3, 4, 5].map((n) => (
+        <Kicker>
+          Paso {step} de {total}
+        </Kicker>
+        <h1 className="m-0 text-[28px] font-semibold">{TITLES[kind]}</h1>
+        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
+          {KINDS.map((_, i) => i + 1).map((n) => (
             <button
               key={n}
               type="button"
@@ -335,6 +374,7 @@ export default function Turno() {
           {upcoming.map((a) => (
             <span key={a.id} className="text-[15px] font-medium">
               {a.dayLabel} · {a.time} con {a.barberName}
+              {a.locationName ? ` (${a.locationName})` : ''}
             </span>
           ))}
           <span className="text-[13px] font-light text-muted">
@@ -344,7 +384,43 @@ export default function Turno() {
       )}
 
       <div className="fade-in flex flex-col gap-2.5" key={step}>
-        {step === 1 &&
+        {kind === 'lugar' &&
+          locations.map((l) => {
+            const names = config.barbers.filter((b) => b.locationId === l.id).map((b) => b.name);
+            const free = live?.barbers.filter((b) => b.locationId === l.id && b.state === 'free').length ?? 0;
+            const extra = l.address && l.address.startsWith(l.name) ? l.address.slice(l.name.length).replace(/^[,\s·-]+/, '') : l.address;
+            return (
+              <OptionRow
+                key={l.id}
+                on={draft.locationId === l.id}
+                onClick={() => draft.locationId !== l.id && setDraft({ locationId: l.id, time: null, barberId: null })}
+                left={
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-field text-accent">
+                    <Icon name="pin" size={20} />
+                  </span>
+                }
+                title={l.name}
+                sub={[extra, names.length ? `Con ${joinNames(names)}` : null].filter(Boolean).join(' · ')}
+                right={
+                  live?.open ? (
+                    <span className="inline-flex shrink-0 items-center gap-2 text-sm text-soft">
+                      <Dot color={free ? GREEN : RED} />
+                      {free ? `${free} libre${free > 1 ? 's' : ''}` : 'Ocupados'}
+                    </span>
+                  ) : undefined
+                }
+              />
+            );
+          })}
+
+        {kind !== 'lugar' && !locOk && (
+          <button type="button" onClick={() => go(idx('lugar'))} className="flex min-h-14 items-center justify-between rounded-2xl border border-accent bg-card px-4 text-left text-ink">
+            <span>Primero elegí a qué sucursal vas</span>
+            <Icon name="chevron" size={18} className="text-accent" />
+          </button>
+        )}
+
+        {kind === 'servicio' &&
           config.services.map((s) => (
             <OptionRow
               key={s.id}
@@ -356,8 +432,14 @@ export default function Turno() {
             />
           ))}
 
-        {step === 2 && (
+        {kind === 'hora' && locOk && (
           <div className="flex flex-col gap-3.5">
+            {location && (
+              <span className="inline-flex items-center gap-1.5 px-1 text-sm font-light text-muted">
+                <Icon name="pin" size={16} className="text-accent" />
+                En {location.name}
+              </span>
+            )}
             {!days ? (
               <span className="text-muted">Buscando días…</span>
             ) : days.length === 0 ? (
@@ -405,12 +487,13 @@ export default function Turno() {
           </div>
         )}
 
-        {step === 3 && (
+        {kind === 'barbero' && locOk && (
           <>
             <span className="px-1 text-sm font-light text-muted">
               {draft.day ? dayLabel(draft.day) : '—'} · {draft.time ?? '—'}
+              {location ? ` · ${location.name}` : ''}
             </span>
-            {config.barbers.map((b) => {
+            {here.map((b) => {
               const isBusy = !slot || !slot.free.includes(b.id);
               return (
                 <OptionRow
@@ -432,14 +515,15 @@ export default function Turno() {
           </>
         )}
 
-        {step === 4 &&
+        {kind === 'pago' &&
           (Object.keys(PAYMENTS) as Payment[]).map((p) => (
             <OptionRow key={p} on={draft.payment === p} onClick={() => setDraft({ payment: p })} title={PAYMENTS[p].name} sub={payDesc(p)} />
           ))}
 
-        {step === 5 && (
+        {kind === 'resumen' && (
           <div className="flex flex-col gap-3.5">
             <div className="rounded-[20px] border border-line bg-card px-[18px] py-1.5">
+              {multi && <SummaryRow k="Sucursal" v={location?.name ?? '—'} />}
               <SummaryRow k="Servicio" v={service?.name ?? '—'} />
               <SummaryRow k="Día" v={draft.day ? dayLabel(draft.day) : '—'} />
               <SummaryRow k="Horario" v={draft.time ?? '—'} />
@@ -508,7 +592,7 @@ export default function Turno() {
             disabled={busy}
             className={`min-h-14 rounded-full border-0 text-[17px] font-semibold ${primaryOk && !busy ? 'bg-accent text-bg' : 'bg-line text-dim'}`}
           >
-            {busy ? 'Reservando…' : step < 5 ? 'Siguiente →' : 'Reservar turno'}
+            {busy ? 'Reservando…' : step < total ? 'Siguiente →' : 'Reservar turno'}
           </button>
         </div>
       </div>
@@ -518,8 +602,8 @@ export default function Turno() {
           <>
             <span>
               {me.queue.status === 'called'
-                ? 'Te llamaron: acercate al local.'
-                : `Estás en la fila: número ${me.queue.position} (~${me.queue.waitMin} min)`}
+                ? `Te llamaron: acercate al local${me.queue.location ? ` de ${me.queue.location}` : ''}.`
+                : `Estás en la fila${me.queue.location ? ` de ${me.queue.location}` : ''}: número ${me.queue.position} (~${me.queue.waitMin} min)`}
             </span>
             <GhostButton small onClick={queueAction} className="shrink-0 !text-ink">
               Salir
@@ -527,14 +611,17 @@ export default function Turno() {
           </>
         ) : live && !live.open ? (
           <span className="text-muted">¿Sin turno? La fila se arma cuando estamos atendiendo.</span>
+        ) : multi && !location ? (
+          <span className="text-muted">¿Sin turno? Elegí la sucursal y te mostramos cuántos hay en su fila.</span>
         ) : (
           <>
             <span>
-              {live
-                ? live.queue.waiting
-                  ? `¿Sin turno? ${live.queue.waiting} en la fila (~${live.queue.waitMin} min)`
-                  : '¿Sin turno? No hay nadie en la fila'
-                : '¿Sin turno?'}
+              {(() => {
+                const q = location ? live?.locations?.find((l) => l.id === location.id) : live?.queue;
+                const where = location ? ` de ${location.name}` : '';
+                if (!live || !q) return '¿Sin turno?';
+                return q.waiting ? `¿Sin turno? ${q.waiting} en la fila${where} (~${q.waitMin} min)` : `¿Sin turno? No hay nadie en la fila${where}`;
+              })()}
             </span>
             {registered ? (
               <GhostButton small onClick={queueAction} className="shrink-0 !text-ink">

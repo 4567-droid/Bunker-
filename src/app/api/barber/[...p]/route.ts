@@ -1,4 +1,6 @@
 import {
+  activeLocations,
+  barberLocation,
   apptDto,
   bizNow,
   blockDto,
@@ -74,6 +76,7 @@ async function agenda(tx: Tx, biz: Business, st: StaffRow, day: string, now: Now
     };
   });
   const dayBlocks = (await loadBlocks(tx, biz.id, day, day)).filter((b) => !b.barber_id || b.barber_id === st.id);
+  const here = await barberPlace(tx, biz, st);
   const next = cuttingRow
     ? list.find((r) => r.status === 'booked' && r.start >= cuttingRow.start_min) ?? null
     : null;
@@ -83,7 +86,7 @@ async function agenda(tx: Tx, biz: Business, st: StaffRow, day: string, now: Now
     now: fmtMin(now.min),
     goal: biz.loyalty_goal,
     prize: { cell: prizeInfo(bizPrize(biz)).cell, note: prizeInfo(bizPrize(biz)).barber },
-    barber: { id: st.id, name: st.name },
+    barber: { id: st.id, name: st.name, location: here.multi ? here.name : null },
     status: {
       state: (status?.state ?? 'free') as 'free' | 'busy' | 'cutting',
       freeInMin: status?.state === 'cutting' ? minutesUntil(status.free_at) : null,
@@ -115,11 +118,31 @@ async function myAppointment(tx: Tx, biz: Business, st: StaffRow, id: unknown) {
   return a;
 }
 
+/**
+ * Sucursal del barbero. Con varias sucursales, cada barbero ve y llama solo la fila de su local
+ * (los que se anotaron sin sucursal cuentan en la primera).
+ */
+async function barberPlace(tx: Tx, biz: Business, st: StaffRow) {
+  const locs = await activeLocations(tx, biz.id);
+  const [me] = await tx<{ location_id: string | null }[]>`select location_id from staff where id = ${st.id}`;
+  const id = barberLocation({ location_id: me?.location_id ?? null }, locs);
+  return { id, multi: locs.length > 1, first: locs[0]?.id ?? null, name: locs.find((l) => l.id === id)?.name ?? null };
+}
+
+/** Condición SQL: la entrada de la fila es de la sucursal del barbero */
+function inMyQueue(tx: Tx, here: Awaited<ReturnType<typeof barberPlace>>) {
+  if (!here.multi) return tx`true`;
+  return here.id === here.first
+    ? tx`(location_id = ${here.id} or location_id is null)`
+    : tx`location_id = ${here.id}`;
+}
+
 async function queueList(tx: Tx, biz: Business, st: StaffRow) {
+  const here = await barberPlace(tx, biz, st);
   const rows = await tx<{ id: string; name: string; phone: string | null; status: string; called_by: string | null; client_id: string | null; called_at: Date | null }[]>`
     select id, name, phone, status, called_by, client_id, called_at from queue_entries
     where business_id = ${biz.id}
-      and (status = 'waiting' or (status = 'called' and called_by = ${st.id}))
+      and (status = 'waiting' and ${inMyQueue(tx, here)} or (status = 'called' and called_by = ${st.id}))
     order by created_at`;
   const waiting = rows.filter((r) => r.status === 'waiting');
   return {
@@ -290,16 +313,17 @@ export const POST = route(async (req, path) => {
 
     case 'queue': {
       const out = await tenantTx(biz.id, async (tx) => {
+        const here = await barberPlace(tx, biz, st);
         if (sub === 'call') {
           const [next] = await tx<{ id: string }[]>`
-            select id from queue_entries where business_id = ${biz.id} and status = 'waiting'
+            select id from queue_entries where business_id = ${biz.id} and status = 'waiting' and ${inMyQueue(tx, here)}
             order by created_at limit 1 for update skip locked`;
           if (!next) fail(409, 'No hay nadie esperando.');
           await tx`update queue_entries set status = 'called', called_by = ${st.id}, called_at = now() where id = ${next.id}`;
         } else if (sub === 'add') {
           const name = str(body, 'name', { min: 2, max: 60, label: 'el nombre' });
           const phone = body.phone ? normalizePhone(String(body.phone), areaFromWhatsapp(biz.whatsapp)) : null;
-          await tx`insert into queue_entries (business_id, name, phone) values (${biz.id}, ${name}, ${phone})`;
+          await tx`insert into queue_entries (business_id, name, phone, location_id) values (${biz.id}, ${name}, ${phone}, ${here.id})`;
         } else if (sub === 'leave') {
           await tx`update queue_entries set status = 'left' where id = ${uuid(body.id)} and business_id = ${biz.id}`;
         } else if (sub === 'serve') {
@@ -315,10 +339,10 @@ export const POST = route(async (req, path) => {
           const [a] = await tx<ApptRow[]>`
             insert into appointments (business_id, client_id, client_name, client_phone, barber_id, service_id, service_name,
                                       duration_min, day, start_min, end_min, source, price, discount_pct, discount_reason,
-                                      final_price, reward_id, loyalty_free, confirmed_at)
+                                      final_price, reward_id, loyalty_free, confirmed_at, location_id)
             values (${biz.id}, ${e.client_id}, ${e.name}, ${e.phone}, ${st.id}, ${service.id}, ${service.name},
                     ${service.duration_min}, ${now.day}, ${start}, ${start + service.duration_min}, 'fila', ${service.price},
-                    ${qt.pct}, ${qt.reason}, ${qt.finalPrice}, ${qt.rewardId}, ${qt.loyaltyFree}, now())
+                    ${qt.pct}, ${qt.reason}, ${qt.finalPrice}, ${qt.rewardId}, ${qt.loyaltyFree}, now(), ${here.id})
             returning *`;
           if (qt.rewardId) await tx`update rewards set status = 'reserved', appointment_id = ${a.id} where id = ${qt.rewardId}`;
           await completeAppointment(tx, biz, a, now);

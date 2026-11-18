@@ -17,6 +17,10 @@ export function useHome() {
   const service = config.services.find((s) => s.id === draft.serviceId);
   const barber = config.barbers.find((b) => b.id === draft.barberId);
   const goal = biz.loyaltyGoal;
+  // Sucursales: con dos o más, el cliente elige primero dónde va
+  const locations = config.locations;
+  const multi = locations.length > 1;
+  const location = multi ? (locations.find((l) => l.id === draft.locationId) ?? null) : null;
   const lastVisit = me?.client?.lastVisitOn ?? null;
   // Doble sello: vale si vuelve dentro de los N días de su último corte
   const doubleUntil = lastVisit && biz.doubleStampDays ? addDays(lastVisit, biz.doubleStampDays) : null;
@@ -34,10 +38,18 @@ export function useHome() {
     stamps: me?.client?.stamps ?? 0,
     nextAppt: me?.upcoming?.[0] ?? null,
     prize: prizeInfo({ kind: biz.loyaltyReward, pct: biz.loyaltyRewardPct, text: biz.loyaltyRewardText, goal }),
+    locations,
+    multi,
+    location,
+    /** Link de Maps de una sucursal (si la dirección no dice la ciudad, se suma la del negocio) */
+    locMaps: (l: { name: string; address: string | null; mapsUrl: string | null }) =>
+      mapsHref(l.mapsUrl, l.address ?? l.name, (l.address ?? '').includes(',') ? null : biz.city),
+    /** Paso del turno al que lleva cada fila (con sucursales, sin elegirla se empieza por ahí) */
     rows: [
-      { label: service ? `${service.name} · ${money(service.price)}` : 'Seleccionar corte', step: 1 },
-      { label: draft.day && draft.time ? `${dayLabel(draft.day)} · ${draft.time}` : 'Seleccionar fecha y horario', step: service ? 2 : 1 },
-      { label: barber ? `Con ${barber.name}` : 'Seleccionar barbero', step: service && draft.time ? 3 : 1 },
+      ...(multi ? [{ label: location ? `En ${location.name}` : 'Seleccionar sucursal', step: 'lugar' }] : []),
+      { label: service ? `${service.name} · ${money(service.price)}` : 'Seleccionar corte', step: multi && !location ? 'lugar' : 'servicio' },
+      { label: draft.day && draft.time ? `${dayLabel(draft.day)} · ${draft.time}` : 'Seleccionar fecha y horario', step: multi && !location ? 'lugar' : service ? 'hora' : 'servicio' },
+      { label: barber ? `Con ${barber.name}` : 'Seleccionar barbero', step: multi && !location ? 'lugar' : service && draft.time ? 'barbero' : 'servicio' },
     ],
     wa: biz.whatsapp ? enviarWhatsApp({ to: biz.whatsapp, text: `Hola ${short}! Quería hacer una consulta.` }).url : null,
     hours: hoursSummary(biz.hours),
@@ -63,6 +75,7 @@ export function NextApptCard({ className = '' }: { className?: string }) {
         </span>
         <span className="truncate text-sm font-light text-muted">
           {nextAppt.serviceName} con {nextAppt.barberName}
+          {nextAppt.locationName ? ` · ${nextAppt.locationName}` : ''}
           {nextAppt.projectedTime ? ` · se corrió de las ${nextAppt.time}` : ''}
         </span>
       </span>
@@ -94,9 +107,55 @@ export function InviteBanners({ className = '' }: { className?: string }) {
   return null;
 }
 
-/** "Ahora en el local": cada barbero libre u ocupado, y la fila sin turno */
+type LiveBarber = NonNullable<ReturnType<typeof useApp>['live']>['barbers'][number];
+
+function BarberLine({ b, photo }: { b: LiveBarber; photo?: string }) {
+  const busy = b.state !== 'free';
+  const status = b.state === 'cutting' ? (b.freeInMin && b.freeInMin > 0 ? `Se libera en ${b.freeInMin} min` : 'Terminando') : b.state === 'busy' ? 'Ocupado' : 'Libre';
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="flex items-center gap-3 text-[17px] font-medium">
+        {photo && <Avatar name={b.name} src={photo} size={36} />}
+        {b.name}
+      </span>
+      <span className="inline-flex items-center gap-2 text-sm text-soft">
+        <Dot color={busy ? RED : GREEN} />
+        {status}
+      </span>
+    </div>
+  );
+}
+
+/** "Ahora en el local": cada barbero libre u ocupado, y la fila sin turno (con sucursales, separado por local) */
 export function LiveCard({ className = '' }: { className?: string }) {
-  const { live, photos } = useHome();
+  const { live, photos, multi, locations } = useHome();
+  if (live?.open && multi) {
+    return (
+      <Card className={`gap-3 px-5 py-[18px] ${className}`}>
+        <Kicker>Ahora en los locales</Kicker>
+        {locations.map((l, i) => {
+          const q = live.locations?.find((x) => x.id === l.id);
+          return (
+            <div key={l.id} className={`flex flex-col gap-2.5 ${i > 0 ? 'border-t border-line pt-3' : ''}`}>
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium tracking-[.06em] text-accent uppercase">
+                <Icon name="pin" size={15} />
+                {l.name}
+              </span>
+              {live.barbers
+                .filter((b) => b.locationId === l.id)
+                .map((b) => (
+                  <BarberLine key={b.id} b={b} photo={photos[b.id]} />
+                ))}
+              <span className="text-[13px] font-light text-muted">
+                {q?.waiting ? `Sin turno: ${q.waiting} en la fila (~${q.waitMin} min)` : 'Sin turno: no hay fila ahora'}
+              </span>
+            </div>
+          );
+        })}
+        {live.closesAt && <span className="border-t border-line pt-3 text-sm font-light text-muted">Atendemos hasta las {live.closesAt}</span>}
+      </Card>
+    );
+  }
   return (
     <Card className={`gap-3 px-5 py-[18px] ${className}`}>
       <Kicker>Ahora en el local</Kicker>
@@ -108,29 +167,9 @@ export function LiveCard({ className = '' }: { className?: string }) {
         </span>
       ) : (
         <>
-          {live.barbers.map((b) => {
-            const busy = b.state !== 'free';
-            const status =
-              b.state === 'cutting'
-                ? b.freeInMin && b.freeInMin > 0
-                  ? `Se libera en ${b.freeInMin} min`
-                  : 'Terminando'
-                : b.state === 'busy'
-                  ? 'Ocupado'
-                  : 'Libre';
-            return (
-              <div key={b.id} className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-3 text-[17px] font-medium">
-                  {photos[b.id] && <Avatar name={b.name} src={photos[b.id]} size={36} />}
-                  {b.name}
-                </span>
-                <span className="inline-flex items-center gap-2 text-sm text-soft">
-                  <Dot color={busy ? RED : GREEN} />
-                  {status}
-                </span>
-              </div>
-            );
-          })}
+          {live.barbers.map((b) => (
+            <BarberLine key={b.id} b={b} photo={photos[b.id]} />
+          ))}
           <span className="border-t border-line pt-3 text-sm font-light text-muted">
             {live.queue.waiting ? `Sin turno: ${live.queue.waiting} en la fila (~${live.queue.waitMin} min)` : 'Sin turno: no hay fila ahora'}
             {live.closesAt ? ` · atendemos hasta las ${live.closesAt}` : ''}
@@ -164,12 +203,30 @@ export function LoyaltyLink({ className = '' }: { className?: string }) {
 
 /** Dirección, horarios, Cómo llegar, Instagram y WhatsApp */
 export function WhereCard({ className = '' }: { className?: string }) {
-  const { where, hours, maps, ig, wa, waShown } = useHome();
-  if (!where && hours.length === 0) return null;
+  const { where, hours, maps, ig, wa, waShown, multi, locations, locMaps } = useHome();
+  if (!where && hours.length === 0 && !multi) return null;
   return (
     <Card className={`gap-3 px-5 py-[18px] ${className}`}>
-      <Kicker>Dónde estamos</Kicker>
-      {where && <span className="text-[17px] font-medium">{where}</span>}
+      <Kicker>{multi ? 'Nuestros locales' : 'Dónde estamos'}</Kicker>
+      {multi
+        ? locations.map((l) => (
+            <div key={l.id} className="flex items-center justify-between gap-3">
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[17px] font-medium">{l.name}</span>
+                {l.address && l.address !== l.name && <span className="truncate text-[13px] font-light text-muted">{l.address}</span>}
+              </span>
+              <a
+                href={locMaps(l) ?? '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-line-2 px-4 text-sm"
+              >
+                <Icon name="pin" size={16} />
+                Cómo llegar
+              </a>
+            </div>
+          ))
+        : where && <span className="text-[17px] font-medium">{where}</span>}
       {hours.length > 0 && (
         <span className="flex flex-col text-sm font-light text-muted">
           {hours.map((h) => (
@@ -178,7 +235,7 @@ export function WhereCard({ className = '' }: { className?: string }) {
         </span>
       )}
       <div className="grid grid-cols-2 gap-2.5">
-        {maps && (
+        {maps && !multi && (
           <a href={maps} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-line-2 text-[15px] font-medium">
             <Icon name="pin" size={18} />
             Cómo llegar

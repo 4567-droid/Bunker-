@@ -86,7 +86,7 @@ Cada usuario ve solo datos de su negocio. Esto se controla con RLS en la base, n
 - Pie: nombre e Instagram. La dirección, los horarios y "Cómo llegar" están en la tarjeta "Dónde estamos".
   Los paneles **no** aparecen en la web pública: barberos y dueño entran con su link (`/barbero`, `/central`).
 
-**Turno** — 5 pasos, uno por pantalla, con "Paso X de 5" y barra de avance:
+**Turno** — 5 pasos, uno por pantalla, con "Paso X de 5" y barra de avance (con varias sucursales, 6: primero la sucursal):
 1. Servicio.
 2. Día (próximos días, domingos cerrado) y horario: **solo se muestran horarios con al menos un barbero libre**.
 3. Barbero: Mauri / Iván con luz verde o roja; el ocupado no se puede elegir.
@@ -263,6 +263,8 @@ Muestras y propuestas para otros negocios (migración `013_muestras_y_bosco.sql`
   y horarios **de ejemplo** (lun a sáb de 10 a 21). Barberos de ejemplo Mateo 1111, Joaco 2222, Bruno 3333; Central
   `bosco` / `bosco1234`. **Sin WhatsApp ni alias** a propósito, para que no le lleguen mensajes ni plata de prueba
   (el WhatsApp de Bosco se carga en su Central → Ajustes solo cuando lo muestren o lo aprueben).
+- **Bosco tiene dos sucursales** (migración `014_sucursales.sql`): Ayacucho 184 (Mateo 1111, Joaco 2222, Bruno 3333)
+  y Arturo Illia 897 (Santi 4444, Nacho 5555). La migración volvió a armar la propuesta con las sucursales.
 - Toda web con estado `demo` (muestras y propuestas) muestra arriba "Versión de prueba para mostrar el sistema",
   no aparece en Google (`noindex`) y no publica datos del local para Google (JSON-LD): no es la web oficial de nadie.
 - Estilo `natural` con foto del local (`hero_url`): la foto va de fondo de la portada (oscurecida), el logo arriba del
@@ -295,6 +297,22 @@ Estilos de web por negocio (migraciones `008_estilo_natural.sql`, `009_estilo_mo
   y la Central quedan con la misma marca. Las tarjetas del Inicio son las mismas para los dos (`home-cards.tsx`).
 - El administrador elige el estilo al crear o editar un negocio (con su color sugerido). La barra del navegador del
   celular toma el color de cada estilo (`THEME_BAR` en `business.ts`).
+
+Sucursales (migración `014_sucursales.sql`, pedido del 18/11/2026 para Bosco):
+
+- Tabla `locations` (nombre corto que ve el cliente, dirección, link de Maps); `staff.location_id` (dónde atiende cada
+  barbero), `appointments.location_id` (dónde es el turno) y `queue_entries.location_id` (la fila es de cada local).
+- **Con dos o más sucursales el cliente elige primero a cuál va**: Turno pasa a 6 pasos ("¿A qué sucursal vas?" es el
+  1.º) y los días, horarios y barberos son solo los de ese local (`barbersAt()` en `booking.ts`; la API pide
+  `location`). Al reservar se valida que el barbero atienda en esa sucursal. Los pasos tienen nombre
+  (`/turno?paso=lugar|servicio|hora|barbero|pago|resumen`; los números viejos 1–5 siguen andando).
+- Inicio: la barra de reserva empieza por "Sucursal", "Ahora en los locales" separa barberos y fila por local, y
+  "Nuestros locales" lista cada dirección con "Cómo llegar" y "Reservar acá". La sucursal elegida queda guardada
+  después de reservar. El mensaje de WhatsApp, la cuenta y el panel del barbero dicen la sucursal.
+- Fila sin turno por sucursal: el cliente se anota en la que eligió y cada barbero ve y llama solo la de su local.
+- Central → Ajustes → "Sucursales": agregar, editar o quitar (no deja quitar una con turnos reservados), y en cada
+  barbero "Atiende en". Un barbero sin sucursal cuenta como de la primera.
+- **Con una sola dirección (Bunker, Navaja) no cambia nada**: sin sucursales cargadas, 5 pasos como siempre.
 
 Pendiente: datos reales de la barbería (dirección, alias, horarios, fotos, precios de productos),
 dominio, y la etapa 2 de WhatsApp (API oficial) dentro de `enviarWhatsApp` en `src/lib/whatsapp.ts`.

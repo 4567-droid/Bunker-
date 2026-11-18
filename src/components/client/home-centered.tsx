@@ -85,16 +85,19 @@ const TEXTS: Record<CenteredVariant, { title: [string, string]; sub: string }> =
 };
 
 export function HomeCentered({ variant }: { variant: CenteredVariant }) {
-  const { biz, config, draft, service, barber, wa } = useHome();
+  const { biz, config, draft, service, barber, wa, multi, location } = useHome();
   const { setDraft } = useApp();
   const router = useRouter();
   const city = (biz.city ?? '').replace(/^[A-Z]\d{4}\s*/, '').split(',')[0];
   const t = TEXTS[variant];
 
+  // Con varias sucursales la barra empieza por "Sucursal" y, sin elegirla, todo lleva a ese paso
+  const noPlace = multi && !location;
   const parts = [
-    { label: 'Servicio', value: service ? service.name : 'Elegí', step: 1 },
-    { label: 'Día y hora', value: draft.day && draft.time ? `${dayLabel(draft.day)} ${draft.time}` : 'Cuándo', step: service ? 2 : 1 },
-    { label: 'Barbero', value: barber ? barber.name : 'El que quieras', step: service && draft.time ? 3 : 1 },
+    ...(multi ? [{ label: 'Sucursal', value: location ? location.name : 'Elegí', step: 'lugar' }] : []),
+    { label: 'Servicio', value: service ? service.name : 'Elegí', step: noPlace ? 'lugar' : 'servicio' },
+    { label: 'Día y hora', value: draft.day && draft.time ? `${dayLabel(draft.day)} ${draft.time}` : 'Cuándo', step: noPlace ? 'lugar' : service ? 'hora' : 'servicio' },
+    { label: 'Barbero', value: barber ? barber.name : 'El que quieras', step: noPlace ? 'lugar' : service && draft.time ? 'barbero' : 'servicio' },
   ];
   // En "moderno" el botón principal va con el color del negocio (en Bunker, amarillo)
   const reserveCls = variant === 'moderno' ? 'bg-accent text-bg' : 'bg-bg text-ink';
@@ -185,7 +188,7 @@ export function HomeCentered({ variant }: { variant: CenteredVariant }) {
                 type="button"
                 onClick={() => {
                   setDraft({ serviceId: s.id, time: null, barberId: null });
-                  router.push('/turno?paso=2');
+                  router.push(noPlace ? '/turno?paso=lugar' : '/turno?paso=hora');
                 }}
                 className="inline-flex min-h-10 items-center rounded-full border border-line-2 bg-card/70 px-4 text-sm text-ink backdrop-blur"
               >
@@ -227,11 +230,15 @@ export function HomeCentered({ variant }: { variant: CenteredVariant }) {
 
 /** Círculos como los destacados de Instagram: Servicios, Horarios, Ubicación, Productos */
 function Highlights() {
-  const { maps, ig } = useHome();
+  const { maps, ig, multi } = useHome();
   const items: { label: string; icon: IconName | 'scissors'; href: string; external?: boolean }[] = [
     { label: 'Servicios', icon: 'scissors', href: '/turno' },
     { label: 'Horarios', icon: 'estado', href: '#donde' },
-    ...(maps ? [{ label: 'Ubicación', icon: 'pin' as const, href: maps, external: true }] : []),
+    ...(multi
+      ? [{ label: 'Sucursales', icon: 'pin' as const, href: '#donde' }]
+      : maps
+        ? [{ label: 'Ubicación', icon: 'pin' as const, href: maps, external: true }]
+        : []),
     { label: 'Productos', icon: 'productos', href: '/productos' },
     ...(ig ? [{ label: 'Experiencias', icon: 'instagram' as const, href: `https://www.instagram.com/${ig}/`, external: true }] : []),
   ];
@@ -265,10 +272,13 @@ function Highlights() {
 
 /** Ficha del local como la de Google: botones redondos arriba y filas con ícono (horario, servicios, dirección…) */
 function PlacePanel({ className = '' }: { className?: string }) {
-  const { live, where, maps, ig, wa, waShown, hours, config } = useHome();
+  const { live, where, maps, ig, wa, waShown, hours, config, multi, locations, locMaps } = useHome();
+  const { setDraft } = useApp();
+  const router = useRouter();
   const actions: { label: string; icon: IconName; href: string; external?: boolean }[] = [
     { label: 'Turno', icon: 'calendar', href: '/turno' },
-    ...(maps ? [{ label: 'Cómo llegar', icon: 'pin' as const, href: maps, external: true }] : []),
+    // Con varias sucursales, cada una tiene su "Cómo llegar" más abajo
+    ...(maps && !multi ? [{ label: 'Cómo llegar', icon: 'pin' as const, href: maps, external: true }] : []),
     ...(wa ? [{ label: 'WhatsApp', icon: 'whatsapp' as const, href: wa, external: true }] : []),
     ...(ig ? [{ label: 'Instagram', icon: 'instagram' as const, href: `https://www.instagram.com/${ig}/`, external: true }] : []),
   ];
@@ -306,13 +316,13 @@ function PlacePanel({ className = '' }: { className?: string }) {
       ),
       href: '/turno',
     },
-    ...(where ? [{ icon: 'pin' as const, title: where, sub: maps ? 'Cómo llegar' : undefined, href: maps ?? undefined, external: true }] : []),
+    ...(where && !multi ? [{ icon: 'pin' as const, title: where, sub: maps ? 'Cómo llegar' : undefined, href: maps ?? undefined, external: true }] : []),
     ...(ig ? [{ icon: 'instagram' as const, title: `@${ig}`, sub: 'Instagram', href: `https://www.instagram.com/${ig}/`, external: true }] : []),
     ...(wa ? [{ icon: 'whatsapp' as const, title: waShown ?? 'WhatsApp', sub: 'WhatsApp', href: wa, external: true }] : []),
   ];
   return (
     <section id="donde" className={`flex scroll-mt-24 flex-col rounded-[20px] border border-line bg-card ${className}`}>
-      <span className="px-5 pt-[18px] text-[13px] tracking-[.18em] text-muted uppercase">Dónde estamos</span>
+      <span className="px-5 pt-[18px] text-[13px] tracking-[.18em] text-muted uppercase">{multi ? 'Nuestros locales' : 'Dónde estamos'}</span>
       <div className="flex justify-around gap-2 border-b border-line px-3 pt-4 pb-4">
         {actions.map((a) => {
           const inner = (
@@ -335,6 +345,40 @@ function PlacePanel({ className = '' }: { className?: string }) {
           );
         })}
       </div>
+      {multi && (
+        <div className="flex flex-col divide-y divide-line border-b border-line px-3">
+          {locations.map((l) => {
+            const href = locMaps(l);
+            const names = config.barbers.filter((b) => b.locationId === l.id).map((b) => b.name);
+            return (
+              <div key={l.id} className="flex min-h-[72px] items-center gap-3 px-2 py-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-field text-accent">
+                  <Icon name="pin" size={21} />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-[15px] leading-snug font-medium">{l.name}</span>
+                  {names.length > 0 && <span className="text-[13px] font-light text-muted">Con {names.join(', ')}</span>}
+                  {href && (
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center self-start text-[13px] text-accent underline">
+                      Cómo llegar
+                    </a>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft({ locationId: l.id, time: null, barberId: null });
+                    router.push('/turno?paso=servicio');
+                  }}
+                  className="inline-flex min-h-11 shrink-0 items-center rounded-full border border-accent/70 px-4 text-sm font-medium text-accent"
+                >
+                  Reservar acá
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div className="flex flex-col divide-y divide-line px-3 pb-1.5">
         {rows.map((r, i) => {
           const inner = (

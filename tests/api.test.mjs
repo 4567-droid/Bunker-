@@ -857,7 +857,7 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   assert.equal(cb.business.logoUrl, '/muestras/bosco/logo.png');
   assert.equal(cb.business.whatsapp, null, 'sin WhatsApp: a Bosco no le llegan mensajes de prueba');
   assert.equal(cb.business.transferAlias, null, 'sin alias: nadie transfiere plata por error');
-  assert.deepEqual(cb.barbers.map((b) => b.name), ['Mateo', 'Joaco', 'Bruno']);
+  assert.deepEqual(cb.barbers.map((b) => b.name), ['Mateo', 'Joaco', 'Bruno', 'Santi', 'Nacho']);
   assert.ok(cb.services.some((x) => x.name === 'Afeitado con navaja'), 'sus propios servicios');
   const boscoOwner = agent({ 'x-bk-biz': 'bosco' });
   assert.equal((await boscoOwner.post('/api/staff/login', { role: 'owner', username: 'bosco', password: 'bosco1234' })).status, 200);
@@ -866,6 +866,52 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   assert.equal((await mateo.post('/api/staff/login', { role: 'barber', username: 'Mateo', password: '1111' })).status, 200);
   assert.equal((await mateo.get('/api/barber/agenda')).data.barber.name, 'Mateo');
   assert.equal((await agent({ 'x-bk-biz': 'demo' }).post('/api/staff/login', { role: 'owner', username: 'bosco', password: 'bosco1234' })).status, 401, 'en Navaja no existe');
+  // Sucursales: Bosco tiene dos locales. El cliente elige primero dónde y ve solo los barberos y horarios de ese local
+  assert.deepEqual(cb.locations.map((l) => l.name), ['Ayacucho 184', 'Arturo Illia 897']);
+  const [ayacucho, illia] = cb.locations;
+  const at = (l) => cb.barbers.filter((b) => b.locationId === l.id);
+  assert.deepEqual(at(ayacucho).map((b) => b.name), ['Mateo', 'Joaco', 'Bruno']);
+  assert.deepEqual(at(illia).map((b) => b.name), ['Santi', 'Nacho']);
+  assert.deepEqual(cfgBunker.data.locations, [], 'Bunker no tiene sucursales: todo sigue igual');
+  const corte = cb.services[0];
+  r = await pubBosco.get(`/api/public/days?service=${corte.id}`);
+  assert.equal(r.status, 400, 'con varias sucursales hay que elegir una');
+  const dayI = (await pubBosco.get(`/api/public/days?service=${corte.id}&location=${illia.id}`)).data.days.find((d) => d.available).day;
+  const slotsI = (await pubBosco.get(`/api/public/slots?service=${corte.id}&day=${dayI}&location=${illia.id}`)).data.slots;
+  const illiaIds = at(illia).map((b) => b.id);
+  assert.ok(slotsI.length > 0);
+  assert.ok(slotsI.every((x) => x.free.length > 0 && x.free.every((id) => illiaIds.includes(id))), 'solo horarios con barberos de esa sucursal');
+  const cliB = agent({ 'x-bk-biz': 'bosco' });
+  r = await cliB.post('/api/client/register', { name: 'Pedro Sucursal', phone: '362 099-1234' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const slotI = slotsI[slotsI.length - 1];
+  const bookB = { serviceId: corte.id, day: dayI, time: slotI.time, payment: 'efectivo' };
+  r = await cliB.post('/api/client/book', { ...bookB, barberId: slotI.free[0] });
+  assert.equal(r.status, 400, 'sin sucursal no reserva');
+  r = await cliB.post('/api/client/book', { ...bookB, barberId: at(ayacucho)[0].id, locationId: illia.id });
+  assert.ok(r.status === 409 || r.status === 400, 'un barbero de Ayacucho no atiende en Arturo Illia');
+  r = await cliB.post('/api/client/book', { ...bookB, barberId: slotI.free[0], locationId: illia.id });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.appointment.locationName, 'Arturo Illia 897');
+  const meB = await cliB.get('/api/client/me');
+  assert.equal(meB.data.upcoming[0].locationName, 'Arturo Illia 897', 'en su cuenta ve dónde es el turno');
+  // En vivo y fila sin turno, por sucursal
+  const liveB = (await pubBosco.get('/api/public/live')).data;
+  assert.equal(liveB.locations.length, 2);
+  assert.ok(liveB.barbers.every((b) => b.locationId === ayacucho.id || b.locationId === illia.id));
+  r = await cliB.post('/api/client/queue', { action: 'join' });
+  assert.equal(r.status, 400, 'en la fila sin turno hay que decir en qué sucursal');
+  r = await cliB.post('/api/client/queue', { action: 'join', locationId: illia.id });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal((await cliB.get('/api/client/me')).data.queue.location, 'Arturo Illia 897');
+  const santi = agent({ 'x-bk-biz': 'bosco' });
+  assert.equal((await santi.post('/api/staff/login', { role: 'barber', username: 'Santi', password: '4444' })).status, 200);
+  assert.ok((await santi.get('/api/barber/queue')).data.waiting.some((w) => w.name === 'Pedro Sucursal'), 'el barbero de esa sucursal lo ve en su fila');
+  assert.ok(!(await mateo.get('/api/barber/queue')).data.waiting.some((w) => w.name === 'Pedro Sucursal'), 'el de la otra sucursal no');
+  assert.equal((await santi.get('/api/barber/agenda')).data.barber.location, 'Arturo Illia 897');
+  // Bunker sigue igual: una sola fila, sin sucursales
+  assert.deepEqual((await pub.get('/api/public/live')).data.locations, []);
+
   // La web avisa que es de prueba y no aparece en Google; la de Bunker no cambia
   const htmlBosco = await (await pubBosco.raw('/')).text();
   assert.match(htmlBosco, /Versión de prueba/);

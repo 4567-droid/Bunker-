@@ -31,11 +31,21 @@ export interface BarberRow {
   name: string;
   instagram: string | null;
   photo_url: string | null;
+  /** Sucursal donde atiende (null: la primera, o el negocio no tiene sucursales) */
+  location_id: string | null;
+}
+
+export interface LocationRow {
+  id: string;
+  name: string;
+  address: string | null;
+  maps_url: string | null;
 }
 
 export interface ApptRow {
   id: string;
   business_id: string;
+  location_id: string | null;
   client_id: string | null;
   client_name: string;
   client_phone: string | null;
@@ -77,9 +87,33 @@ export const bizNow = (biz: Business): Now => {
 };
 
 export async function activeBarbers(tx: Tx, bizId: string): Promise<BarberRow[]> {
-  return tx<BarberRow[]>`select id, name, instagram, photo_url from staff
+  return tx<BarberRow[]>`select id, name, instagram, photo_url, location_id from staff
                          where business_id = ${bizId} and role = 'barber' and active
                          order by sort, name`;
+}
+
+// ---------------------------------------------------------------------
+// Sucursales: con dos o más, el cliente elige primero dónde y ve solo esos barberos.
+// Con una o ninguna, todo funciona como siempre (sin elegir sucursal).
+// ---------------------------------------------------------------------
+export async function activeLocations(tx: Tx, bizId: string): Promise<LocationRow[]> {
+  return tx<LocationRow[]>`select id, name, address, maps_url from locations
+                           where business_id = ${bizId} and active order by sort, name`;
+}
+
+/** Sucursal de un barbero: la suya si sigue activa; si no tiene, la primera */
+export function barberLocation(b: { location_id: string | null }, locs: LocationRow[]): string | null {
+  if (!locs.length) return null;
+  return b.location_id && locs.some((l) => l.id === b.location_id) ? b.location_id : locs[0].id;
+}
+
+/** Barberos que atienden en una sucursal. Si el negocio tiene varias, la sucursal es obligatoria. */
+export async function barbersAt(tx: Tx, bizId: string, locationId: unknown): Promise<{ barbers: BarberRow[]; location: LocationRow | null }> {
+  const [barbers, locs] = await Promise.all([activeBarbers(tx, bizId), activeLocations(tx, bizId)]);
+  if (locs.length < 2) return { barbers, location: locs[0] ?? null };
+  const location = locs.find((l) => l.id === locationId) ?? null;
+  if (!location) fail(400, 'Elegí la sucursal.');
+  return { barbers: barbers.filter((b) => barberLocation(b, locs) === location.id), location };
 }
 
 export async function activeServices(tx: Tx, bizId: string): Promise<ServiceRow[]> {
@@ -169,8 +203,8 @@ function slotsFor(biz: Business, now: Now, day: string, duration: number, barber
 }
 
 /** Próximos días abiertos y si les queda algún horario libre */
-export async function listDays(tx: Tx, biz: Business, service: ServiceRow, now: Now) {
-  const barbers = await activeBarbers(tx, biz.id);
+export async function listDays(tx: Tx, biz: Business, service: ServiceRow, now: Now, locationId?: unknown) {
+  const { barbers } = await barbersAt(tx, biz.id, locationId);
   const ids = barbers.map((b) => b.id);
   const last = addDays(now.day, biz.booking_days - 1);
   const load = await agendaLoad(tx, biz.id, now.day, last);
@@ -185,9 +219,17 @@ export async function listDays(tx: Tx, biz: Business, service: ServiceRow, now: 
 }
 
 /** Horarios con al menos un barbero libre, y qué barberos están libres en cada uno */
-export async function listSlots(tx: Tx, biz: Business, service: ServiceRow, day: string, now: Now, opts: { barberId?: string; anyTime?: boolean } = {}) {
+export async function listSlots(
+  tx: Tx,
+  biz: Business,
+  service: ServiceRow,
+  day: string,
+  now: Now,
+  opts: { barberId?: string; anyTime?: boolean; locationId?: unknown } = {},
+) {
   if (!isDay(day)) fail(400, 'Fecha inválida.');
-  const barbers = await activeBarbers(tx, biz.id);
+  // El panel del barbero pide sus propios horarios: ahí no hace falta la sucursal
+  const barbers = opts.barberId ? await activeBarbers(tx, biz.id) : (await barbersAt(tx, biz.id, opts.locationId)).barbers;
   const ids = opts.barberId ? barbers.filter((b) => b.id === opts.barberId).map((b) => b.id) : barbers.map((b) => b.id);
   const load = await agendaLoad(tx, biz.id, day, day);
   return slotsFor(biz, now, day, service.duration_min, ids, load, opts).map((s) => ({
@@ -235,6 +277,8 @@ export interface NewAppointment {
   day: unknown;
   time: unknown;
   barberId: unknown;
+  /** Con varias sucursales, la que eligió el cliente (el barbero tiene que atender ahí) */
+  locationId?: unknown;
   payment?: unknown;
   productIds?: unknown;
 }
@@ -254,9 +298,16 @@ export async function createAppointment(
   const m = /^(\d{2}):(\d{2})$/.exec(time);
   if (!m) fail(400, 'Elegí un horario.');
   const start = Number(m[1]) * 60 + Number(m[2]);
-  const barbers = await activeBarbers(tx, biz.id);
+  const [barbers, locs] = await Promise.all([activeBarbers(tx, biz.id), activeLocations(tx, biz.id)]);
   const barber = barbers.find((b) => b.id === input.barberId);
   if (!barber) fail(400, 'Elegí un barbero.');
+  // El turno es en la sucursal del barbero. Desde la web, tiene que ser la que eligió el cliente.
+  const locationId = barberLocation(barber, locs);
+  if (source === 'web' && locs.length > 1) {
+    const chosen = locs.find((l) => l.id === input.locationId);
+    if (!chosen) fail(400, 'Elegí la sucursal.');
+    if (chosen.id !== locationId) fail(409, `${barber.name} atiende en otra sucursal. Elegí un barbero de ${chosen.name}.`);
+  }
   const payment = (typeof input.payment === 'string' && input.payment in PAYMENTS ? input.payment : null) as Payment | null;
   if (source === 'web' && !payment) fail(400, 'Elegí cómo vas a pagar.');
 
@@ -292,12 +343,12 @@ export async function createAppointment(
     insert into appointments (business_id, client_id, client_name, client_phone, barber_id, service_id, service_name,
                               duration_min, day, start_min, end_min, source, payment, price, discount_pct,
                               discount_reason, final_price, products, products_total, reward_id, loyalty_free,
-                              confirmed_at)
+                              confirmed_at, location_id)
     values (${biz.id}, ${client?.id ?? null}, ${client?.name ?? who.name ?? 'Cliente'}, ${client?.phone ?? who.phone ?? null},
             ${barber.id}, ${service.id}, ${service.name}, ${service.duration_min}, ${day}, ${start},
             ${start + service.duration_min}, ${source}, ${payment}, ${service.price}, ${q.pct}, ${q.reason},
             ${q.finalPrice}, ${tx.json(products)}, ${productsTotal}, ${q.rewardId}, ${q.loyaltyFree},
-            ${source === 'barbero' ? new Date() : null})
+            ${source === 'barbero' ? new Date() : null}, ${locationId})
     returning *`;
   if (q.rewardId) {
     await tx`update rewards set status = 'reserved', appointment_id = ${appt.id} where id = ${q.rewardId}`;
@@ -419,13 +470,16 @@ export function minutesUntil(d: Date | null): number | null {
 }
 
 export async function liveStatus(tx: Tx, biz: Business, now: Now) {
-  const rows = await tx<{ barber_id: string; name: string; state: 'free' | 'busy' | 'cutting'; free_at: Date | null }[]>`
-    select bs.barber_id, bs.name, bs.state, bs.free_at
+  const rows = await tx<{ barber_id: string; name: string; state: 'free' | 'busy' | 'cutting'; free_at: Date | null; location_id: string | null }[]>`
+    select bs.barber_id, bs.name, bs.state, bs.free_at, s.location_id
     from barber_status bs join staff s on s.id = bs.barber_id
     where bs.business_id = ${biz.id} and s.active
     order by s.sort, s.name`;
-  const [{ waiting }] = await tx<{ waiting: number }[]>`
-    select count(*)::int as waiting from queue_entries where business_id = ${biz.id} and status = 'waiting'`;
+  const locs = await activeLocations(tx, biz.id);
+  const byLoc = await tx<{ location_id: string | null; n: number }[]>`
+    select location_id, count(*)::int as n from queue_entries
+    where business_id = ${biz.id} and status = 'waiting' group by location_id`;
+  const waiting = byLoc.reduce((a, r) => a + r.n, 0);
   const services = await activeServices(tx, biz.id);
   const avg = services.length ? services.reduce((a, s) => a + s.duration_min, 0) / services.length : 30;
   const cuts = await businessCuts(tx, biz.id, now.day);
@@ -447,8 +501,18 @@ export async function liveStatus(tx: Tx, biz: Business, now: Now) {
       name: r.name,
       state: r.state,
       freeInMin: r.state === 'cutting' ? minutesUntil(r.free_at) : null,
+      locationId: barberLocation(r, locs),
     })),
     queue: { waiting, waitMin: queueWait(waiting, avg, Math.max(1, rows.length)), avgMin: Math.round(avg) },
+    // Con varias sucursales: la fila sin turno de cada una (los que esperan sin sucursal cuentan en la primera)
+    locations:
+      locs.length > 1
+        ? locs.map((l, i) => {
+            const n = byLoc.filter((q) => q.location_id === l.id || (i === 0 && !locs.some((x) => x.id === q.location_id))).reduce((a, q) => a + q.n, 0);
+            const here = rows.filter((r) => barberLocation(r, locs) === l.id).length;
+            return { id: l.id, name: l.name, waiting: n, waitMin: queueWait(n, avg, Math.max(1, here)) };
+          })
+        : [],
   };
 }
 
@@ -473,7 +537,7 @@ export function shiftFromRows(rows: ApptRow[], day: string, now: Now): Record<st
   );
 }
 
-export function apptDto(a: ApptRow, extra: { barberName?: string; projected?: number } = {}) {
+export function apptDto(a: ApptRow, extra: { barberName?: string; projected?: number; locationName?: string | null } = {}) {
   return {
     id: a.id,
     day: a.day,
@@ -486,6 +550,7 @@ export function apptDto(a: ApptRow, extra: { barberName?: string; projected?: nu
     duration: a.duration_min,
     barberId: a.barber_id,
     barberName: extra.barberName ?? null,
+    locationName: extra.locationName ?? null,
     clientName: a.client_name,
     status: a.status,
     source: a.source,

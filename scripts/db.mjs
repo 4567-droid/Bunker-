@@ -407,7 +407,7 @@ async function reset() {
     process.exit(1);
   }
   await sql.unsafe(`
-    drop table if exists sample_businesses, former_clients, images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
+    drop table if exists locations, sample_businesses, former_clients, images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
       auth_failures, sessions, clients, barber_status, staff, businesses, _migrations cascade;
   `);
   console.log('Tablas borradas.');

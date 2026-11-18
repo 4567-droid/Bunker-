@@ -771,7 +771,8 @@ interface Settings {
     referralPercent: number;
     monthlyGoal: number;
   };
-  barbers: { id: string; name: string; instagram: string | null; photoUrl: string | null; active: boolean }[];
+  barbers: { id: string; name: string; instagram: string | null; photoUrl: string | null; active: boolean; locationId: string | null }[];
+  locations: { id: string; name: string; address: string | null; mapsUrl: string | null }[];
   services: { id: string; name: string; duration: number; price: number; active: boolean }[];
   products: { id: string; name: string; description: string | null; price: number | null; imageUrl: string | null; active: boolean }[];
 }
@@ -957,11 +958,23 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
 
       <ClosedDays barbers={s.barbers.filter((b) => b.active)} />
 
+      <Section title="Sucursales">
+        <span className="text-[13px] font-light text-muted">
+          {s.locations.length > 1
+            ? 'Tenés varias sucursales: el cliente elige primero a cuál va y ve solo los horarios y barberos de ese local.'
+            : 'Si tenés más de un local, cargá cada dirección acá y elegí en qué sucursal atiende cada barbero. Con una sola dirección no hace falta.'}
+        </span>
+        {s.locations.map((l) => (
+          <LocationRow key={l.id} l={l} save={save} />
+        ))}
+        <LocationRow save={save} />
+      </Section>
+
       <Section title="Barberos">
         {s.barbers.map((b) => (
-          <BarberRow key={b.id} b={b} save={save} />
+          <BarberRow key={b.id} b={b} locations={s.locations} save={save} />
         ))}
-        <NewBarber save={save} />
+        <NewBarber locations={s.locations} save={save} />
       </Section>
 
       <Section title="Servicios y precios">
@@ -985,7 +998,64 @@ function Ajustes({ isOwner, onSaved }: { isOwner: boolean; onSaved: () => Promis
 
 type Save = (path: string, body: Record<string, unknown>, ok?: string) => Promise<boolean>;
 
-function BarberRow({ b, save }: { b: Settings['barbers'][number]; save: Save }) {
+/** Una sucursal (o el formulario para agregar otra) */
+function LocationRow({ l, save }: { l?: Settings['locations'][number]; save: Save }) {
+  const [name, setName] = useState(l?.name ?? '');
+  const [address, setAddress] = useState(l?.address ?? '');
+  const [mapsUrl, setMapsUrl] = useState(l?.mapsUrl ?? '');
+  return (
+    <div className={`flex flex-col gap-2 ${l ? 'border-b border-field pb-2.5' : 'pt-1'}`}>
+      {!l && <span className="text-[13px] text-muted">Agregar una sucursal</span>}
+      <div className="flex gap-2">
+        <Small label="Nombre corto (lo ve el cliente)" value={name} onChange={setName} placeholder="Ej: Ayacucho 184" />
+      </div>
+      <Small label="Dirección completa" value={address} onChange={setAddress} placeholder="Ej: Ayacucho 184, Resistencia, Chaco" />
+      <Small label="Link de Google Maps (opcional)" value={mapsUrl} onChange={setMapsUrl} placeholder="https://maps.app.goo.gl/…" />
+      <div className="flex gap-2">
+        <GhostButton
+          disabled={name.trim().length < 2}
+          onClick={async () => {
+            const ok = await save(l ? '/api/owner/location/update' : '/api/owner/location', { id: l?.id, name, address, mapsUrl }, l ? `Sucursal ${name} guardada.` : `Sucursal ${name} agregada.`);
+            if (ok && !l) {
+              setName('');
+              setAddress('');
+              setMapsUrl('');
+            }
+          }}
+          className="flex-1 !min-h-12"
+        >
+          {l ? 'Guardar' : 'Agregar sucursal'}
+        </GhostButton>
+        {l && (
+          <GhostButton
+            onClick={() => window.confirm(`¿Quitar la sucursal ${l.name}? Sus barberos pasan a la primera sucursal.`) && save('/api/owner/location/delete', { id: l.id }, `Sucursal ${l.name} quitada.`)}
+            className="shrink-0 !min-h-12"
+          >
+            Quitar
+          </GhostButton>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Elegir la sucursal de un barbero (solo si hay dos o más) */
+function LocationChips({ locations, value, onPick }: { locations: Settings['locations']; value: string | null; onPick: (id: string) => void }) {
+  if (locations.length < 2) return null;
+  const cur = value && locations.some((l) => l.id === value) ? value : locations[0].id;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-light text-muted">Atiende en</span>
+      {locations.map((l) => (
+        <Chip key={l.id} size="sm" on={cur === l.id} onClick={() => onPick(l.id)} className="!min-h-9">
+          {l.name}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+function BarberRow({ b, locations, save }: { b: Settings['barbers'][number]; locations: Settings['locations']; save: Save }) {
   const [code, setCode] = useState('');
   return (
     <div className="flex flex-col gap-2 border-b border-field pb-2.5">
@@ -995,6 +1065,11 @@ function BarberRow({ b, save }: { b: Settings['barbers'][number]; save: Save }) 
           {b.active ? 'Activo' : 'Inactivo'}
         </Chip>
       </div>
+      <LocationChips
+        locations={locations}
+        value={b.locationId}
+        onPick={(id) => id !== b.locationId && save('/api/owner/barber/update', { id: b.id, locationId: id }, `${b.name} atiende en ${locations.find((l) => l.id === id)?.name}.`)}
+      />
       <PhotoPicker
         current={b.photoUrl}
         label="Subir foto"
@@ -1023,9 +1098,10 @@ function BarberRow({ b, save }: { b: Settings['barbers'][number]; save: Save }) 
   );
 }
 
-function NewBarber({ save }: { save: Save }) {
+function NewBarber({ locations, save }: { locations: Settings['locations']; save: Save }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [locationId, setLocationId] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-2 pt-1">
       <span className="text-[13px] text-muted">Dar de alta un barbero</span>
@@ -1033,10 +1109,11 @@ function NewBarber({ save }: { save: Save }) {
         <Small label="Nombre" value={name} onChange={setName} />
         <Small label="Código para entrar" type="password" value={code} onChange={setCode} />
       </div>
+      <LocationChips locations={locations} value={locationId} onPick={setLocationId} />
       <GhostButton
         disabled={name.trim().length < 2 || code.length < 4}
         onClick={async () => {
-          if (await save('/api/owner/barber', { name, code }, `${name} ya puede entrar al panel con su nombre y código.`)) {
+          if (await save('/api/owner/barber', { name, code, locationId: locationId ?? locations[0]?.id ?? null }, `${name} ya puede entrar al panel con su nombre y código.`)) {
             setName('');
             setCode('');
           }

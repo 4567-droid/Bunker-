@@ -1,6 +1,7 @@
 import { BAD_CODE, findReferrer, inviteBlock, newReferralCode, normalizeCode, notNew, rememberFormerClient, wasClientBefore } from '@/lib/clients';
 import { clientIp, endSession, endSessionsFor, guardAttempts, recordFailure, startSession } from '@/lib/auth';
 import {
+  activeLocations,
   apptDto,
   bizNow,
   businessCuts,
@@ -30,15 +31,16 @@ function readPhone(raw: string, biz: Business): string {
 }
 
 async function mePayload(tx: Tx, biz: Business, c: ClientRow, now: Now) {
-  const appts = await tx<(ApptRow & { barber_name: string })[]>`
-    select a.*, s.name as barber_name from appointments a join staff s on s.id = a.barber_id
+  const appts = await tx<(ApptRow & { barber_name: string; location_name: string | null })[]>`
+    select a.*, s.name as barber_name, l.name as location_name
+    from appointments a join staff s on s.id = a.barber_id left join locations l on l.id = a.location_id
     where a.client_id = ${c.id} and a.status in ('booked', 'in_progress')
       and (a.day > ${now.day} or (a.day = ${now.day} and a.end_min > ${now.min - 60}))
     order by a.day, a.start_min`;
   const upcoming = [];
   for (const a of appts) {
     const shifted = a.day === now.day ? await shiftedTimes(tx, biz.id, a.barber_id, a.day, now) : {};
-    upcoming.push(apptDto(a, { barberName: a.barber_name, projected: shifted[a.id] }));
+    upcoming.push(apptDto(a, { barberName: a.barber_name, projected: shifted[a.id], locationName: a.location_name }));
   }
   const rewards = await tx<{ id: string; kind: string; percent: number; status: string; source_name: string | null }[]>`
     select r.id, r.kind, r.percent, r.status, sc.name as source_name
@@ -47,9 +49,10 @@ async function mePayload(tx: Tx, biz: Business, c: ClientRow, now: Now) {
   const [ref] = await tx<{ invited: number; rewarded: number }[]>`
     select (select count(*)::int from clients where referred_by = ${c.id}) as invited,
            (select count(*)::int from rewards where client_id = ${c.id} and kind = 'referral') as rewarded`;
-  const [entry] = await tx<{ id: string; status: string; created_at: Date }[]>`
-    select id, status, created_at from queue_entries
-    where client_id = ${c.id} and status in ('waiting', 'called') limit 1`;
+  const [entry] = await tx<{ id: string; status: string; created_at: Date; location_id: string | null; location_name: string | null }[]>`
+    select q.id, q.status, q.created_at, q.location_id, l.name as location_name
+    from queue_entries q left join locations l on l.id = q.location_id
+    where q.client_id = ${c.id} and q.status in ('waiting', 'called') limit 1`;
   const past = await tx<{ id: string; day: string; service_name: string; barber_name: string; status: string; stamps_added: number; loyalty_free: boolean; final_price: number; discount_pct: number }[]>`
     select a.id, a.day, a.service_name, s.name as barber_name, a.status, a.stamps_added, a.loyalty_free, a.final_price, a.discount_pct
     from appointments a join staff s on s.id = a.barber_id
@@ -60,14 +63,18 @@ async function mePayload(tx: Tx, biz: Business, c: ClientRow, now: Now) {
   const invite = { canUse: (await inviteBlock(tx, biz, c)) === null, by: by ? firstName(by.name) : null, percent: biz.referral_percent };
   let queue = null;
   if (entry) {
+    // Con sucursales, la fila es la de su local
     const [{ ahead }] = await tx<{ ahead: number }[]>`
       select count(*)::int as ahead from queue_entries
-      where business_id = ${biz.id} and status = 'waiting' and created_at < ${entry.created_at}`;
+      where business_id = ${biz.id} and status = 'waiting' and created_at < ${entry.created_at}
+        and location_id is not distinct from ${entry.location_id}`;
     const live = await liveStatus(tx, biz, now);
-    const per = live.queue.avgMin / Math.max(1, live.barbers.length);
+    const here = entry.location_id ? live.barbers.filter((b) => b.locationId === entry.location_id).length : live.barbers.length;
+    const per = live.queue.avgMin / Math.max(1, here);
     queue = {
       id: entry.id,
       status: entry.status,
+      location: entry.location_name,
       position: ahead + 1,
       waitMin: entry.status === 'called' ? 0 : Math.max(5, Math.round((ahead * per) / 5) * 5),
     };
@@ -322,9 +329,10 @@ export const POST = route(async (req, [action]) => {
     case 'book': {
       const c = await requireClient(biz);
       const appt = await tenantTx(biz.id, async (tx) => {
-        const a = await createAppointment(tx, biz, { client: c }, { serviceId: body.serviceId, day: body.day, time: body.time, barberId: body.barberId, payment: body.payment, productIds: body.productIds }, now, "web");
-        const [b] = await tx<{ name: string }[]>`select name from staff where id = ${a.barber_id}`;
-        return apptDto(a, { barberName: b?.name });
+        const a = await createAppointment(tx, biz, { client: c }, { serviceId: body.serviceId, day: body.day, time: body.time, barberId: body.barberId, locationId: body.locationId, payment: body.payment, productIds: body.productIds }, now, "web");
+        const [b] = await tx<{ name: string; location: string | null }[]>`
+          select s.name, (select name from locations where id = ${a.location_id}) as location from staff s where s.id = ${a.barber_id}`;
+        return apptDto(a, { barberName: b?.name, locationName: b?.location });
       });
       return json({ appointment: appt }, 201);
     }
@@ -428,8 +436,12 @@ export const POST = route(async (req, [action]) => {
           }
           const [already] = await tx`select 1 from queue_entries where client_id = ${c.id} and status in ('waiting', 'called')`;
           if (already) fail(409, 'Ya estás en la fila.');
-          await tx`insert into queue_entries (business_id, client_id, name, phone)
-                   values (${biz.id}, ${c.id}, ${c.name}, ${c.phone})`;
+          // Con varias sucursales, la fila es la del local donde va a ir
+          const locs = await activeLocations(tx, biz.id);
+          const loc = locs.length > 1 ? locs.find((l) => l.id === body.locationId) : locs[0];
+          if (locs.length > 1 && !loc) fail(400, 'Elegí en qué sucursal te anotás.');
+          await tx`insert into queue_entries (business_id, client_id, name, phone, location_id)
+                   values (${biz.id}, ${c.id}, ${c.name}, ${c.phone}, ${loc?.id ?? null})`;
         } else {
           await tx`update queue_entries set status = 'left'
                    where client_id = ${c.id} and status in ('waiting', 'called')`;

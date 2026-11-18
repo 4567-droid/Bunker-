@@ -20,7 +20,7 @@ function NextAppt({ a, onChange }: { a: Appt; onChange: () => Promise<void> }) {
   const wa = biz.whatsapp
     ? enviarWhatsApp({
         to: biz.whatsapp,
-        text: `Hola ${short}! Soy ${me?.client?.name}. Confirmo mi turno: ${a.serviceName} con ${a.barberName}, ${a.dayLabel} a las ${a.time}. Pago: ${pay}.`,
+        text: `Hola ${short}! Soy ${me?.client?.name}. Confirmo mi turno: ${a.serviceName} con ${a.barberName}, ${a.dayLabel} a las ${a.time}${a.locationName ? `, en ${a.locationName}` : ''}. Pago: ${pay}.`,
       }).url
     : null;
   const label = a.status === 'in_progress' ? 'Te están atendiendo' : !a.waSent && wa ? 'Falta confirmar por WhatsApp' : a.confirmed ? 'Asistencia confirmada' : 'Falta confirmar tu asistencia';
@@ -51,6 +51,12 @@ function NextAppt({ a, onChange }: { a: Appt; onChange: () => Promise<void> }) {
       )}
       <span className="text-sm font-light text-muted">
         {a.serviceName} con {a.barberName} · {pay} · {money(a.total)}
+        {a.locationName && (
+          <>
+            <br />
+            En {a.locationName}
+          </>
+        )}
         {a.discountReason ? ` (${a.discountReason})` : ''}
       </span>
       <span className="inline-flex items-center gap-2 text-sm">
@@ -190,6 +196,7 @@ export default function Cuenta() {
           <Kicker>Fila sin turno</Kicker>
           <span className="text-lg font-semibold">
             {me.queue.status === 'called' ? 'Te llamaron: acercate al local' : `Sos el número ${me.queue.position}`}
+            {me.queue.location ? ` · ${me.queue.location}` : ''}
           </span>
           {me.queue.status === 'waiting' && <span className="text-sm font-light text-muted">Espera estimada: ~{me.queue.waitMin} min</span>}
           <GhostButton small onClick={leaveQueue} className="self-start">
