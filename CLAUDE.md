@@ -248,6 +248,28 @@ Varios negocios y negocio de muestra (migración `006_negocio_demo.sql`):
   copiar la configuración de Bunker y arma los turnos desde hoy; conserva nombre, logo, WhatsApp y dirección web). Local: `node scripts/db.mjs demo [--reset]`.
 - La muestra nunca es el negocio por defecto: sin dominio ni `?negocio=`, se muestra Bunker.
 
+Muestras y propuestas para otros negocios (migración `013_muestras_y_bosco.sql`):
+
+- Cada muestra es una fila de `sample_businesses` (slug + `config` en JSON: nombre, estilo, color, logo, foto,
+  dirección, Instagram, horarios, servicios, productos, dueño y barberos con su clave cifrada, o `copy_from` para
+  copiar la configuración de otro negocio). `sample_business(slug, reset)` la arma con 120 clientes, 4 meses de
+  cortes y números; `demo_business()` ahora es `sample_business('demo')`. En Vercel se crean solas las que falten;
+  local: `node scripts/db.mjs demo [slug] [--reset]`. En /admin cada una tiene su tarjeta (`SAMPLES` en
+  `src/lib/demo.ts`: accesos y textos) y su botón "Dejar como nueva" (`POST /api/admin/demo {slug, reset}`).
+- **Propuesta para Bosco Barber Shop** (slug `bosco`, `turnos-bosco-propuesta.vercel.app`), pedida el 18/11/2026 para
+  mostrársela al dueño de Bosco: su nombre, logo (rehecho del de Instagram), foto del local y dirección
+  (`public/muestras/bosco/`), Instagram `bosco.barbershopp`, estilo `natural` en verde oliva y dorado `#C9A66B`.
+  Servicios de su Google (corte, corte + barba, acondicionamiento de barba, afeitado con navaja, tintura) con precios
+  y horarios **de ejemplo** (lun a sáb de 10 a 21). Barberos de ejemplo Mateo 1111, Joaco 2222, Bruno 3333; Central
+  `bosco` / `bosco1234`. **Sin WhatsApp ni alias** a propósito, para que no le lleguen mensajes ni plata de prueba
+  (el WhatsApp de Bosco se carga en su Central → Ajustes solo cuando lo muestren o lo aprueben).
+- Toda web con estado `demo` (muestras y propuestas) muestra arriba "Versión de prueba para mostrar el sistema",
+  no aparece en Google (`noindex`) y no publica datos del local para Google (JSON-LD): no es la web oficial de nadie.
+- Estilo `natural` con foto del local (`hero_url`): la foto va de fondo de la portada (oscurecida), el logo arriba del
+  título, círculos como los destacados de Instagram (Servicios, Horarios, Ubicación, Productos, Experiencias) y
+  "Dónde estamos" como la ficha de Google (botones redondos y filas con ícono: abierto/cerrado, servicios, dirección,
+  Instagram, WhatsApp). Sin foto, se ve como antes.
+
 Estilos de web por negocio (migraciones `008_estilo_natural.sql`, `009_estilo_moderno.sql`, `011_estilo_app.sql` y
 `012_app_oscuro.sql`, columna `businesses.theme`; la lista de estilos está en `src/lib/themes.ts`):
 

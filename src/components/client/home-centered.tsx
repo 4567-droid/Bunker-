@@ -3,12 +3,14 @@
 // Inicio con el armado "centrado" (estilos "moderno" y "natural"): título grande centrado con serifa, una barra
 // de reserva redonda (como un buscador) y los servicios en pastillas debajo.
 //  - moderno: con los colores del negocio (Bunker: negro y amarillo), su logo arriba y el sillón dibujado
-//  - natural: verde oscuro y dorado, con hojas
+//  - natural: verde oscuro y dorado, con hojas; si el negocio tiene foto del local va de fondo, y suma círculos
+//    como los destacados de Instagram y un panel con horario, dirección y contacto como el de Google (Bosco)
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/components/client/app-context';
 import { HomeFooter, InviteBanners, LiveCard, LoyaltyLink, NextApptCard, useHome, WhereCard } from '@/components/client/home-cards';
-import { Icon } from '@/components/ui';
+import { Icon, Scissors, type IconName } from '@/components/ui';
 import { money } from '@/lib/format';
 import { dayLabel } from '@/lib/time';
 
@@ -97,11 +99,24 @@ export function HomeCentered({ variant }: { variant: CenteredVariant }) {
   // En "moderno" el botón principal va con el color del negocio (en Bunker, amarillo)
   const reserveCls = variant === 'moderno' ? 'bg-accent text-bg' : 'bg-bg text-ink';
 
+  // "natural" con foto del local: la foto de fondo, oscurecida para que se lea el título
+  const photo = variant === 'natural' && biz.heroUrl ? biz.heroUrl : null;
+
   return (
     <div className="flex flex-col">
-      <section className="relative overflow-hidden bg-hero px-5 pt-5 pb-12 md:px-10 md:pt-20 md:pb-24">
-        <Glow variant={variant} />
-        {variant === 'natural' ? (
+      <section
+        className="relative overflow-hidden bg-hero bg-cover px-5 pt-5 pb-12 md:px-10 md:pt-20 md:pb-24"
+        style={
+          photo
+            ? {
+                backgroundImage: `linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 62%, transparent) 0%, color-mix(in srgb, var(--color-bg) 80%, transparent) 55%, var(--color-bg) 100%), url("${encodeURI(photo)}")`,
+                backgroundPosition: 'center 30%',
+              }
+            : undefined
+        }
+      >
+        {!photo && <Glow variant={variant} />}
+        {photo ? null : variant === 'natural' ? (
           <>
             <Leaf className="absolute -top-6 -left-10 w-[150px] -rotate-[28deg] text-ink/10 md:top-10 md:left-[4%] md:w-[220px]" />
             <Leaf className="absolute -right-12 bottom-0 w-[170px] rotate-[150deg] text-ink/10 md:right-[5%] md:w-[240px]" />
@@ -124,7 +139,7 @@ export function HomeCentered({ variant }: { variant: CenteredVariant }) {
         </div>
 
         <div className="relative mx-auto mt-10 flex max-w-[780px] flex-col items-center text-center md:mt-0">
-          {variant === 'moderno' && biz.logoUrl && (
+          {biz.logoUrl && (variant === 'moderno' || variant === 'natural') && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={biz.logoUrl} alt={biz.name} width={88} height={88} className="mb-5 h-[76px] w-[76px] rounded-full md:h-[96px] md:w-[96px]" />
           )}
@@ -181,15 +196,172 @@ export function HomeCentered({ variant }: { variant: CenteredVariant }) {
         </div>
       </section>
 
-      <div className="mx-auto flex w-full max-w-[1080px] flex-col md:mt-10 md:grid md:grid-cols-2 md:items-start md:gap-4 md:px-10 lg:grid-cols-3">
-        <NextApptCard className="mx-4 mt-5 md:mx-0 md:mt-0" />
-        <InviteBanners className="mx-4 mt-4 md:mx-0 md:mt-0" />
-        <LiveCard className="mx-4 mt-4 md:mx-0 md:mt-0" />
-        <LoyaltyLink className="mx-4 mt-4 md:mx-0 md:mt-0" />
-        <WhereCard className="mx-4 mt-4 md:mx-0 md:mt-0" />
-      </div>
+      {variant === 'natural' ? (
+        <>
+          <Highlights />
+          {/* En la PC: a la izquierda turno, barberos y tarjeta; a la derecha la ficha del local */}
+          <div className="mx-auto flex w-full max-w-[1080px] flex-col md:mt-10 md:grid md:grid-cols-2 md:items-start md:gap-4 md:px-10">
+            <div className="flex flex-col md:gap-4">
+              <NextApptCard className="mx-4 mt-5 md:mx-0 md:mt-0" />
+              <InviteBanners className="mx-4 mt-4 md:mx-0 md:mt-0" />
+              <LiveCard className="mx-4 mt-4 md:mx-0 md:mt-0" />
+              <LoyaltyLink className="mx-4 mt-4 md:mx-0 md:mt-0" />
+            </div>
+            <PlacePanel className="mx-4 mt-4 md:mx-0 md:mt-0" />
+          </div>
+        </>
+      ) : (
+        <div className="mx-auto flex w-full max-w-[1080px] flex-col md:mt-10 md:grid md:grid-cols-2 md:items-start md:gap-4 md:px-10 lg:grid-cols-3">
+          <NextApptCard className="mx-4 mt-5 md:mx-0 md:mt-0" />
+          <InviteBanners className="mx-4 mt-4 md:mx-0 md:mt-0" />
+          <LiveCard className="mx-4 mt-4 md:mx-0 md:mt-0" />
+          <LoyaltyLink className="mx-4 mt-4 md:mx-0 md:mt-0" />
+          <WhereCard className="mx-4 mt-4 md:mx-0 md:mt-0" />
+        </div>
+      )}
 
       <HomeFooter />
     </div>
+  );
+}
+
+/** Círculos como los destacados de Instagram: Servicios, Horarios, Ubicación, Productos */
+function Highlights() {
+  const { maps, ig } = useHome();
+  const items: { label: string; icon: IconName | 'scissors'; href: string; external?: boolean }[] = [
+    { label: 'Servicios', icon: 'scissors', href: '/turno' },
+    { label: 'Horarios', icon: 'estado', href: '#donde' },
+    ...(maps ? [{ label: 'Ubicación', icon: 'pin' as const, href: maps, external: true }] : []),
+    { label: 'Productos', icon: 'productos', href: '/productos' },
+    ...(ig ? [{ label: 'Experiencias', icon: 'instagram' as const, href: `https://www.instagram.com/${ig}/`, external: true }] : []),
+  ];
+  return (
+    <nav aria-label="Destacados" className="no-scrollbar mx-auto mt-1 flex w-full max-w-[1080px] gap-4 overflow-x-auto px-5 pt-1 pb-1 md:mt-8 md:justify-center md:gap-8 md:px-10">
+      {items.map((it) => {
+        const inner = (
+          <>
+            <span className="flex h-[70px] w-[70px] items-center justify-center rounded-full border-[1.5px] border-accent/70 p-[3px]">
+              <span className="flex h-full w-full items-center justify-center rounded-full bg-field text-accent">
+                {it.icon === 'scissors' ? <Scissors size={26} /> : <Icon name={it.icon} size={26} stroke={1.6} />}
+              </span>
+            </span>
+            <span className="text-[13px] text-soft">{it.label}</span>
+          </>
+        );
+        const cls = 'flex min-w-[70px] shrink-0 flex-col items-center gap-1.5';
+        return it.external ? (
+          <a key={it.label} href={it.href} target="_blank" rel="noopener noreferrer" className={cls}>
+            {inner}
+          </a>
+        ) : (
+          <Link key={it.label} href={it.href} className={cls}>
+            {inner}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** Ficha del local como la de Google: botones redondos arriba y filas con ícono (horario, servicios, dirección…) */
+function PlacePanel({ className = '' }: { className?: string }) {
+  const { live, where, maps, ig, wa, waShown, hours, config } = useHome();
+  const actions: { label: string; icon: IconName; href: string; external?: boolean }[] = [
+    { label: 'Turno', icon: 'calendar', href: '/turno' },
+    ...(maps ? [{ label: 'Cómo llegar', icon: 'pin' as const, href: maps, external: true }] : []),
+    ...(wa ? [{ label: 'WhatsApp', icon: 'whatsapp' as const, href: wa, external: true }] : []),
+    ...(ig ? [{ label: 'Instagram', icon: 'instagram' as const, href: `https://www.instagram.com/${ig}/`, external: true }] : []),
+  ];
+  const open = live
+    ? live.open
+      ? { on: true, text: live.closesAt ? `Cierra a las ${live.closesAt}` : 'Abierto ahora' }
+      : { on: false, text: live.nextOpening ? `Abre ${live.nextOpening.label} a las ${live.nextOpening.time}` : 'Cerrado ahora' }
+    : null;
+  const rows: { icon: IconName | 'scissors'; title: ReactNode; sub?: ReactNode; href?: string; external?: boolean }[] = [
+    {
+      icon: 'estado',
+      title: open ? (
+        <>
+          <span className={open.on ? 'text-ok' : 'text-bad'}>{open.on ? 'Abierto' : 'Cerrado'}</span> · {open.text}
+        </>
+      ) : (
+        'Horarios'
+      ),
+      sub: hours.length ? (
+        <>
+          {hours.map((h) => (
+            <span key={h} className="block">
+              {h}
+            </span>
+          ))}
+        </>
+      ) : undefined,
+    },
+    {
+      icon: 'scissors',
+      title: (
+        <>
+          <span className="font-semibold">Servicios:</span> {config.services.map((sv) => sv.name).join(', ')}
+        </>
+      ),
+      href: '/turno',
+    },
+    ...(where ? [{ icon: 'pin' as const, title: where, sub: maps ? 'Cómo llegar' : undefined, href: maps ?? undefined, external: true }] : []),
+    ...(ig ? [{ icon: 'instagram' as const, title: `@${ig}`, sub: 'Instagram', href: `https://www.instagram.com/${ig}/`, external: true }] : []),
+    ...(wa ? [{ icon: 'whatsapp' as const, title: waShown ?? 'WhatsApp', sub: 'WhatsApp', href: wa, external: true }] : []),
+  ];
+  return (
+    <section id="donde" className={`flex scroll-mt-24 flex-col rounded-[20px] border border-line bg-card ${className}`}>
+      <span className="px-5 pt-[18px] text-[13px] tracking-[.18em] text-muted uppercase">Dónde estamos</span>
+      <div className="flex justify-around gap-2 border-b border-line px-3 pt-4 pb-4">
+        {actions.map((a) => {
+          const inner = (
+            <>
+              <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full border border-accent/60 text-accent">
+                <Icon name={a.icon} size={22} />
+              </span>
+              <span className="text-[13px] text-accent">{a.label}</span>
+            </>
+          );
+          const cls = 'flex min-w-[64px] flex-col items-center gap-1.5';
+          return a.external ? (
+            <a key={a.label} href={a.href} target="_blank" rel="noopener noreferrer" className={cls}>
+              {inner}
+            </a>
+          ) : (
+            <Link key={a.label} href={a.href} className={cls}>
+              {inner}
+            </Link>
+          );
+        })}
+      </div>
+      <div className="flex flex-col divide-y divide-line px-3 pb-1.5">
+        {rows.map((r, i) => {
+          const inner = (
+            <>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-field text-accent">
+                {r.icon === 'scissors' ? <Scissors size={20} /> : <Icon name={r.icon} size={21} />}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[15px] leading-snug">{r.title}</span>
+                {r.sub && <span className="text-[13px] font-light text-muted">{r.sub}</span>}
+              </span>
+              {r.href && <Icon name="chevron" size={18} className="shrink-0 text-faint" />}
+            </>
+          );
+          const cls = 'flex min-h-[64px] items-center gap-3 px-2 py-3 text-ink';
+          if (!r.href) return <div key={i} className={cls}>{inner}</div>;
+          return r.external ? (
+            <a key={i} href={r.href} target="_blank" rel="noopener noreferrer" className={cls}>
+              {inner}
+            </a>
+          ) : (
+            <Link key={i} href={r.href} className={cls}>
+              {inner}
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }

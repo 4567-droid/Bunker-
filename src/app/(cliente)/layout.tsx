@@ -31,11 +31,19 @@ function structuredData(config: PublicConfig) {
 }
 
 export default async function ClienteLayout({ children }: { children: ReactNode }) {
-  const config = await getPublicConfig(await currentBusiness());
+  const biz = await currentBusiness();
+  const config = await getPublicConfig(biz);
+  // Muestras y propuestas: aviso arriba y sin datos para Google (no son la web oficial de nadie)
+  const sample = biz.status === 'demo';
   return (
     <ClientApp config={config}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData(config) }} />
+      {!sample && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData(config) }} />}
       <div className="flex min-h-dvh flex-col bg-bg text-ink">
+        {sample && (
+          <p className="order-first m-0 border-b border-line bg-field px-4 py-2 text-center text-[12px] leading-snug text-muted">
+            Versión de prueba para mostrar el sistema · los turnos, clientes y números son de ejemplo
+          </p>
+        )}
         <div className="w-full flex-1">{children}</div>
         <WaBubble />
         <ClientNav />

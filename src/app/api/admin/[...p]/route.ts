@@ -131,9 +131,15 @@ export const POST = route(async (req, path) => {
   }
 
   if (key === 'demo') {
-    // Crea el negocio de muestra, o con reset lo deja como nuevo (turnos desde hoy). Conserva su dirección y marca.
+    // Crea una muestra o propuesta (tabla sample_businesses; sin slug, la de siempre), o con reset la deja como
+    // nueva (turnos desde hoy). Conserva su dirección y su marca.
     const reset = body.reset === true;
-    const [row] = await adminTx((tx) => tx<{ id: string }[]>`select demo_business(${reset}) as id`);
+    const slug = typeof body.slug === 'string' && /^[a-z0-9-]{2,40}$/.test(body.slug) ? body.slug : 'demo';
+    const [row] = await adminTx(async (tx) => {
+      const [known] = await tx`select 1 from sample_businesses where slug = ${slug}`;
+      if (!known) fail(404, 'No hay una muestra con ese nombre.');
+      return tx<{ id: string }[]>`select sample_business(${slug}, ${reset}) as id`;
+    });
     forgetBusinessCache();
     return json({ ok: true, id: row.id });
   }

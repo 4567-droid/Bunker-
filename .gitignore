@@ -8,3 +8,6 @@ out/
 next-env.d.ts
 .vercel
 .DS_Store
+
+# Carpetas para mandar a clientes (propuestas): no se suben (el repositorio es público)
+propuestas/

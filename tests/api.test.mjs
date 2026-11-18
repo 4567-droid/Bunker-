@@ -842,6 +842,39 @@ test('negocios nuevos completos y negocio de muestra separado de Bunker', async 
   assert.ok(!f.data.expenses.some((e) => e.description === 'Gasto de prueba'));
   assert.equal((await owner.get('/api/owner/clients')).data.total, bunkerClientsBefore, 'Bunker no se toca');
   assert.equal((await pub.get('/api/public/config')).data.business.name, 'Bunker Barber Club', 'la web principal sigue siendo Bunker');
+
+  // Propuesta para Bosco: otra muestra, con su marca, servicios y barberos (tabla sample_businesses)
+  r = await admin.post('/api/admin/demo', { slug: 'no-existe' });
+  assert.equal(r.status, 404);
+  r = await agent().post('/api/admin/demo', { slug: 'bosco' });
+  assert.equal(r.status, 401, 'solo el admin');
+  r = await admin.post('/api/admin/demo', { slug: 'bosco' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const pubBosco = agent({ 'x-bk-biz': 'bosco' });
+  const cb = (await pubBosco.get('/api/public/config')).data;
+  assert.equal(cb.business.name, 'Bosco Barber Shop');
+  assert.equal(cb.business.theme, 'natural');
+  assert.equal(cb.business.logoUrl, '/muestras/bosco/logo.png');
+  assert.equal(cb.business.whatsapp, null, 'sin WhatsApp: a Bosco no le llegan mensajes de prueba');
+  assert.equal(cb.business.transferAlias, null, 'sin alias: nadie transfiere plata por error');
+  assert.deepEqual(cb.barbers.map((b) => b.name), ['Mateo', 'Joaco', 'Bruno']);
+  assert.ok(cb.services.some((x) => x.name === 'Afeitado con navaja'), 'sus propios servicios');
+  const boscoOwner = agent({ 'x-bk-biz': 'bosco' });
+  assert.equal((await boscoOwner.post('/api/staff/login', { role: 'owner', username: 'bosco', password: 'bosco1234' })).status, 200);
+  assert.equal((await boscoOwner.get('/api/owner/clients')).data.total, 120);
+  const mateo = agent({ 'x-bk-biz': 'bosco' });
+  assert.equal((await mateo.post('/api/staff/login', { role: 'barber', username: 'Mateo', password: '1111' })).status, 200);
+  assert.equal((await mateo.get('/api/barber/agenda')).data.barber.name, 'Mateo');
+  assert.equal((await agent({ 'x-bk-biz': 'demo' }).post('/api/staff/login', { role: 'owner', username: 'bosco', password: 'bosco1234' })).status, 401, 'en Navaja no existe');
+  // La web avisa que es de prueba y no aparece en Google; la de Bunker no cambia
+  const htmlBosco = await (await pubBosco.raw('/')).text();
+  assert.match(htmlBosco, /Versión de prueba/);
+  assert.match(htmlBosco, /noindex/);
+  assert.doesNotMatch(htmlBosco, /application\/ld\+json/, 'sin datos para Google');
+  const htmlBunker = await (await pub.raw('/')).text();
+  assert.doesNotMatch(htmlBunker, /Versión de prueba/);
+  assert.doesNotMatch(htmlBunker, /noindex/);
+  assert.equal((await owner.get('/api/owner/clients')).data.total, bunkerClientsBefore, 'Bunker no se toca');
 });
 
 test('seguridad: CSRF y freno a intentos', async () => {

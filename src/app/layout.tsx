@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const proto = (h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')).split(',')[0].trim();
   const where = biz?.city ? ` (${biz.city.replace(/^[A-Z]\d{4}\s*/, '')})` : '';
   const description = `Sacá tu turno en ${name}${where}: elegí servicio, horario y barbero. Tarjeta de fidelidad y ${biz?.referral_percent ?? 20}% para vos y un amigo.`;
-  const image = own ? '/brand/og-bunker.png' : biz?.logo_url;
+  const image = own ? '/brand/og-bunker.png' : (biz?.hero_url ?? biz?.logo_url);
   return {
     metadataBase: new URL(`${proto}://${host}`),
     title: { default: `${name} · Turnos online`, template: `%s · ${name}` },
@@ -46,6 +46,8 @@ export async function generateMetadata(): Promise<Metadata> {
       images: image ? [{ url: image, width: own ? 1200 : undefined, height: own ? 630 : undefined, alt: name }] : [],
     },
     twitter: { card: own ? 'summary_large_image' : 'summary', title: name, description, images: image ? [image] : [] },
+    // Las muestras y propuestas no aparecen en Google
+    ...(biz?.status === 'demo' ? { robots: { index: false, follow: false } } : {}),
   };
 }
 

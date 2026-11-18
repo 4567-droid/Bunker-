@@ -4,7 +4,7 @@
 //   npm run db:seed               carga Bunker Barber Club (negocio, dueño, barberos, servicios)
 //   npm run db:seed -- --demo     además carga clientes, turnos y gastos de ejemplo
 //   npm run db:reset -- --yes     BORRA TODO y vuelve a crear (solo para pruebas)
-//   node scripts/db.mjs demo      crea el negocio de muestra (con --reset lo deja como nuevo)
+//   node scripts/db.mjs demo [slug]   crea las muestras (Navaja, Bosco...) que falten; con --reset las deja como nuevas
 //
 // Usa DATABASE_URL (o DIRECT_URL si existe) del archivo .env.local / .env
 //
@@ -407,18 +407,24 @@ async function reset() {
     process.exit(1);
   }
   await sql.unsafe(`
-    drop table if exists former_clients, images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
+    drop table if exists sample_businesses, former_clients, images, blocks, expenses, incomes, queue_entries, rewards, appointments, products, services,
       auth_failures, sessions, clients, barber_status, staff, businesses, _migrations cascade;
   `);
   console.log('Tablas borradas.');
   await migrate();
 }
 
-/** Negocio de muestra (Navaja Barber Club): lo arma la función demo_business() de la migración 006 */
-async function demoBusiness(reset) {
-  const [had] = await sql`select 1 from businesses where slug = 'demo'`;
-  await sql`select demo_business(${reset})`;
-  console.log(had && !reset ? 'Negocio de muestra: ya estaba, no se tocó.' : `✔ negocio de muestra ${reset ? 'renovado' : 'creado'}`);
+/**
+ * Muestras y propuestas (Navaja Barber Club, Bosco...): las arma la función sample_business() de la migración 013,
+ * con lo que dice la tabla sample_businesses. Sin slug, todas.
+ */
+async function demoBusiness(reset, slug = null) {
+  const rows = slug ? [{ slug }] : await sql`select slug from sample_businesses order by slug`;
+  for (const { slug: s } of rows) {
+    const [had] = await sql`select 1 from businesses where slug = ${s}`;
+    await sql`select sample_business(${s}, ${reset})`;
+    console.log(had && !reset ? `Muestra "${s}": ya estaba, no se tocó.` : `✔ muestra "${s}" ${reset ? 'renovada' : 'creada'}`);
+  }
 }
 
 try {
@@ -426,17 +432,17 @@ try {
   else if (cmd === 'prepare') {
     await migrate();
     await seed({ demo: false });
-    // En Vercel: si no existe el negocio de muestra, se crea (no toca nada si ya está). DEMO_BUSINESS=off lo apaga.
+    // En Vercel: las muestras que no existen se crean (no toca las que ya están). DEMO_BUSINESS=off lo apaga.
     if (process.env.VERCEL && process.env.DEMO_BUSINESS !== 'off') await demoBusiness(false);
     await check();
   }
-  else if (cmd === 'demo') await demoBusiness(process.argv.includes('--reset'));
+  else if (cmd === 'demo') await demoBusiness(process.argv.includes('--reset'), process.argv.slice(3).find((a) => !a.startsWith('--')) ?? null);
   else if (cmd === 'check') {
     if (!(await check())) process.exitCode = 1;
   }
   else if (cmd === 'seed') await seed({ demo: process.argv.includes('--demo') });
   else if (cmd === 'reset') await reset();
-  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | demo [--reset] | reset --yes | prepare | check');
+  else console.log('Uso: node scripts/db.mjs migrate | seed [--demo] | demo [slug] [--reset] | reset --yes | prepare | check');
 } catch (e) {
   console.error('Error:', e.message);
   process.exitCode = 1;
