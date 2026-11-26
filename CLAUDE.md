@@ -192,6 +192,9 @@ Velocidad e historial:
 - Cada pedido hace las menos idas a la base posibles: sesión + usuario en una consulta, negocio en una consulta,
   y las acciones del barbero devuelven la agenda nueva (`?view=día`).
 - Central → "Todos los meses" (`/api/owner/months`): ganancia, ingresos, gastos y cortes de cada mes.
+- **Supabase gratis pausa la base después de 7 días sin uso** y la web deja de andar (pasó el 26/11/2026). Para que no
+  pase, Vercel llama todos los días a `/api/cron` (`vercel.json` → `crons`), que hace una consulta chica a la base.
+  Si igual se pausa: supabase.com → el proyecto → "Restore project" (los datos no se pierden).
 
 Revisión del 17/11/2026 (migración `003_datos_bunker.sql` con WhatsApp, Instagram y dirección reales):
 
